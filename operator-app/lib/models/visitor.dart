@@ -15,8 +15,7 @@ class Visitor {
   final int visitCount;
   final String? photoUrl;
 
-  bool get isPending =>
-      status == 'PENDING' || status == 'НА_РАССМОТРЕНИИ';
+  bool get isPending => status == 'PENDING' || status == 'НА_РАССМОТРЕНИИ';
 
   factory Visitor.fromJson(Map<String, dynamic> json) {
     final id = json['id'];

@@ -8,12 +8,15 @@ Install Flutter, then run from this directory:
 
 ```powershell
 flutter pub get
-flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8080
+flutter run -d web-server --web-hostname 0.0.0.0 --web-port 5173 `
+  --dart-define=API_BASE_URL=http://localhost:8080
 ```
 
-`10.0.2.2` is the Android emulator's host-machine address. For desktop use
-`http://localhost:8080`; for a physical device use the development machine's
-reachable LAN address.
+Open `http://localhost:5173` to use the web app. The API remains a separate
+backend service at `http://localhost:8080` by default. Override the API address
+with `--dart-define=API_BASE_URL=...` when the backend runs elsewhere. The
+default API URL is `http://localhost:8080`; Android emulator users should set
+it to `http://10.0.2.2:8080`.
 
 ## Backend contract
 
@@ -30,6 +33,13 @@ The app expects these endpoints on `API_BASE_URL`:
 The monitor, incident list, and visitor list can be refreshed with pull-to-refresh.
 The client currently uses REST polling on demand; live STOMP alerts and MJPEG
 video playback require the corresponding backend services and are not wired yet.
+
+The video archive currently has one clearly labeled playback test fixture. Its
+flower clip is served by [MDN's CC0 video example](https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4)
+and is not footage from the playground. The candidate Mixkit playground clip
+listed in the supplied research notes is marked for personal use only, so it is
+not embedded in the application. Replace the fixture with recordings from the
+video service before using the archive as a real monitoring feature.
 
 ## Tests
 

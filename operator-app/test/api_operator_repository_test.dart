@@ -15,6 +15,7 @@ void main() {
             'type': 'VEHICLE_IN_ZONE',
             'occurredAt': '2026-10-24T10:00:00Z',
             'description': 'Car in restricted area',
+            'snapshotUrl': '/media/snapshots/incident.jpg',
           },
         ]),
         200,
@@ -29,6 +30,37 @@ void main() {
 
     expect(incidents, hasLength(1));
     expect(incidents.single.id, 'incident-1');
+    expect(
+      incidents.single.snapshotUrl,
+      'http://localhost:8080/media/snapshots/incident.jpg',
+    );
+  });
+
+  test('resolves visitor photos against the backend origin', () async {
+    final repository = ApiOperatorRepository(
+      baseUri: Uri.parse('http://localhost:8080'),
+      client: _FakeHttpClient((request) async {
+        expect(request.url.path, '/api/v1/persons');
+        return http.Response(
+          jsonEncode([
+            {
+              'id': 'person-1',
+              'status': 'PENDING',
+              'firstSeenAt': '2026-10-24T10:00:00Z',
+              'photoUrl': '/media/faces/person.jpg',
+            },
+          ]),
+          200,
+        );
+      }),
+    );
+
+    final visitors = await repository.fetchVisitors();
+
+    expect(
+      visitors.single.photoUrl,
+      'http://localhost:8080/media/faces/person.jpg',
+    );
   });
 
   test('reports non-success API responses', () async {

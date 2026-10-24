@@ -50,3 +50,6 @@ app.*.map.json
 # FVM
 .fvm/flutter_sdk
 .fvm/versions
+
+# Keep the application dependency versions reproducible.
+!pubspec.lock

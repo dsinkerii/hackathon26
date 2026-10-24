@@ -11,6 +11,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Видеопоток не подключён'), findsOneWidget);
+    expect(find.text('Сервис подключён'), findsOneWidget);
 
     await tester.tap(find.text('Инциденты'));
     await tester.pumpAndSettle();
@@ -19,7 +20,7 @@ void main() {
 
     await tester.tap(find.text('Посетители'));
     await tester.pumpAndSettle();
-    expect(find.text('Посетители'), findsOneWidget);
+    expect(find.text('Посетители').first, findsOneWidget);
     expect(find.text('Добавить в белый список'), findsOneWidget);
   });
 
@@ -34,6 +35,53 @@ void main() {
 
     expect(repository.confirmedIds, ['visitor-1']);
     expect(find.text('В белом списке'), findsOneWidget);
+  });
+
+  testWidgets('recordings open as a separate page', (tester) async {
+    await tester.pumpWidget(SafePlaygroundApp(repository: _FakeRepository()));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Записи видео'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Тестовая запись'), findsOneWidget);
+    expect(find.textContaining('Демо, CC0'), findsOneWidget);
+    expect(find.text('Период'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Воспроизвести запись'));
+    await tester.pump();
+    expect(find.text('Тестовая запись').last, findsOneWidget);
+  });
+
+  testWidgets('recording date filter can be reset', (tester) async {
+    await tester.pumpWidget(SafePlaygroundApp(repository: _FakeRepository()));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Записи видео'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Период'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    expect(find.byTooltip('Сбросить период'), findsOneWidget);
+    await tester.tap(find.byTooltip('Сбросить период'));
+    await tester.pumpAndSettle();
+
+    expect(find.byTooltip('Сбросить период'), findsNothing);
+    expect(find.text('Период'), findsOneWidget);
+    expect(find.text('Тестовая запись'), findsOneWidget);
+  });
+
+  testWidgets('notification button opens recent events', (tester) async {
+    await tester.pumpWidget(SafePlaygroundApp(repository: _FakeRepository()));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Уведомления'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Уведомления'), findsOneWidget);
+    expect(find.text('VEHICLE_IN_ZONE').last, findsOneWidget);
   });
 }
 

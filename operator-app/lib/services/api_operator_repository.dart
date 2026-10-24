@@ -16,7 +16,7 @@ class ApiOperatorRepository implements OperatorRepository {
   factory ApiOperatorRepository.fromEnvironment() {
     const baseUrl = String.fromEnvironment(
       'API_BASE_URL',
-      defaultValue: 'http://10.0.2.2:8080',
+      defaultValue: 'http://localhost:8080',
     );
     final uri = Uri.tryParse(baseUrl);
     if (uri == null || !uri.hasAuthority || !uri.hasScheme) {
@@ -35,13 +35,25 @@ class ApiOperatorRepository implements OperatorRepository {
   @override
   Future<List<Incident>> fetchIncidents() async {
     final json = await _getJson('/api/v1/incidents');
-    return _parseList(json, Incident.fromJson);
+    return _parseList(
+      json,
+      (item) => Incident.fromJson({
+        ...item,
+        'snapshotUrl': _resolveMediaUrl(item['snapshotUrl']),
+      }),
+    );
   }
 
   @override
   Future<List<Visitor>> fetchVisitors() async {
     final json = await _getJson('/api/v1/persons');
-    return _parseList(json, Visitor.fromJson);
+    return _parseList(
+      json,
+      (item) => Visitor.fromJson({
+        ...item,
+        'photoUrl': _resolveMediaUrl(item['photoUrl']),
+      }),
+    );
   }
 
   @override
@@ -71,6 +83,14 @@ class ApiOperatorRepository implements OperatorRepository {
     } on FormatException {
       throw const ApiException('Сервер вернул некорректный JSON.');
     }
+  }
+
+  String? _resolveMediaUrl(Object? value) {
+    if (value == null) return null;
+    if (value is! String) {
+      throw const FormatException('Expected a media URL');
+    }
+    return _baseUri.resolve(value).toString();
   }
 
   List<T> _parseList<T>(
