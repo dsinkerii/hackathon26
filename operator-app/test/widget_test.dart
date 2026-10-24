@@ -166,6 +166,42 @@ void main() {
     expect(find.text('VEHICLE_IN_ZONE').last, findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('account profile of another user opens from the access list',
+      (tester) async {
+    tester.view.physicalSize = const Size(1280, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(SafePlaygroundApp(repository: _FakeRepository()));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Доступ'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('admin'), findsOneWidget);
+    expect(find.text('operator2'), findsOneWidget);
+
+    await tester.tap(find.text('operator2'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Профиль'), findsOneWidget);
+    expect(find.text('Логин'), findsOneWidget);
+    expect(find.text('Отключена'), findsOneWidget);
+    expect(find.text('Включить'), findsOneWidget);
+
+    await tester.tap(find.text('Включить'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Активна'), findsOneWidget);
+    expect(find.text('Отключить'), findsOneWidget);
+
+    await tester.tap(find.text('Закрыть'));
+    await tester.pumpAndSettle();
+    expect(find.text('Профиль'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
 }
 
 class _FakeRepository implements OperatorRepository, AdminRepository {
@@ -317,7 +353,22 @@ class _FakeRepository implements OperatorRepository, AdminRepository {
   Future<void> deleteRecording(String id) async {}
 
   @override
-  Future<List<AdminAccount>> fetchAccounts() async => const [];
+  Future<List<AdminAccount>> fetchAccounts() async => [
+        AdminAccount(
+          id: 'account-admin',
+          username: 'admin',
+          role: 'ADMIN',
+          enabled: true,
+          createdAt: DateTime.utc(2026, 1, 1),
+        ),
+        AdminAccount(
+          id: 'account-operator',
+          username: 'operator2',
+          role: 'OPERATOR',
+          enabled: false,
+          createdAt: DateTime.utc(2026, 1, 2),
+        ),
+      ];
 
   @override
   Future<AdminAccount> fetchProfile() async => AdminAccount(
@@ -346,8 +397,8 @@ class _FakeRepository implements OperatorRepository, AdminRepository {
   Future<AdminAccount> setAccountEnabled(String id, bool enabled) async =>
       AdminAccount(
         id: id,
-        username: 'operator',
-        role: 'OPERATOR',
+        username: id == 'account-admin' ? 'admin' : 'operator2',
+        role: id == 'account-admin' ? 'ADMIN' : 'OPERATOR',
         enabled: enabled,
         createdAt: DateTime.utc(2026),
       );

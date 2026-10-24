@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/admin_account.dart';
 import '../services/admin_repository.dart';
+import '../widgets/account_profile_details.dart';
 import '../widgets/adaptivity.dart';
 
 class AdminAccountsScreen extends StatefulWidget {
@@ -62,6 +63,18 @@ class _AdminAccountsScreenState extends State<AdminAccountsScreen> {
       if (!mounted) return;
       _showError(error);
     }
+  }
+
+  Future<void> _openAccountProfile(AdminAccount account) async {
+    await showDialog<void>(
+      context: context,
+      builder: (_) => _AccountProfileDialog(
+        account: account,
+        repository: widget.repository,
+        isCurrent: account.username == widget.currentUsername,
+      ),
+    );
+    if (mounted) _reload();
   }
 
   void _showError(Object error) {
@@ -128,6 +141,7 @@ class _AdminAccountsScreenState extends State<AdminAccountsScreen> {
                     _AccountTile(
                       account: account,
                       isCurrent: account.username == widget.currentUsername,
+                      onOpenProfile: () => _openAccountProfile(account),
                       onEnabledChanged: (enabled) =>
                           _setEnabled(account, enabled),
                     ),
@@ -150,16 +164,19 @@ class _AccountTile extends StatelessWidget {
   const _AccountTile({
     required this.account,
     required this.isCurrent,
+    required this.onOpenProfile,
     required this.onEnabledChanged,
   });
 
   final AdminAccount account;
   final bool isCurrent;
+  final VoidCallback onOpenProfile;
   final ValueChanged<bool> onEnabledChanged;
 
   @override
   Widget build(BuildContext context) {
     return ListTile(
+      onTap: onOpenProfile,
       leading: CircleAvatar(
         child: Icon(account.role == 'ADMIN'
             ? Icons.admin_panel_settings
@@ -174,6 +191,151 @@ class _AccountTile extends StatelessWidget {
         value: account.enabled,
         onChanged: isCurrent && account.enabled ? null : onEnabledChanged,
       ),
+    );
+  }
+}
+
+/// Карточка профиля другого пользователя из раздела «Доступ».
+class _AccountProfileDialog extends StatefulWidget {
+  const _AccountProfileDialog({
+    required this.account,
+    required this.repository,
+    this.isCurrent = false,
+  });
+
+  final AdminAccount account;
+  final AdminRepository repository;
+  final bool isCurrent;
+
+  @override
+  State<_AccountProfileDialog> createState() =>
+      _AccountProfileDialogState();
+}
+
+class _AccountProfileDialogState extends State<_AccountProfileDialog> {
+  late bool _enabled = widget.account.enabled;
+  bool _busy = false;
+  Object? _error;
+
+  /// Отключить собственную активную учётную запись нельзя —
+  /// это же правило действует и на backend.
+  bool get _locked => widget.isCurrent && _enabled;
+
+  Future<void> _toggle() async {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await widget.repository.setAccountEnabled(widget.account.id, !_enabled);
+      if (!mounted) return;
+      setState(() => _enabled = !_enabled);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _error = error);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final account = widget.account;
+    final role = account.role == 'ADMIN' ? 'Администратор' : 'Оператор';
+    final displayName =
+        '${account.username}${widget.isCurrent ? ' (вы)' : ''}';
+    return AlertDialog(
+      title: const Text('Профиль'),
+      content: SizedBox(
+        width: adaptiveWidth(context, 400),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                CircleAvatar(
+                  radius: 22,
+                  child: Icon(account.role == 'ADMIN'
+                      ? Icons.admin_panel_settings
+                      : Icons.person),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        displayName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      Text(
+                        role,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF6E6E73),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const Divider(height: 24),
+            AccountDetailRow(
+                icon: Icons.alternate_email,
+                label: 'Логин',
+                value: account.username),
+            AccountDetailRow(icon: Icons.shield_outlined, label: 'Роль', value: role),
+            AccountDetailRow(
+              icon: Icons.verified_user_outlined,
+              label: 'Статус',
+              value: _enabled ? 'Активна' : 'Отключена',
+              valueColor: _enabled
+                  ? const Color(0xFF248A3D)
+                  : const Color(0xFFFF3B30),
+            ),
+            AccountDetailRow(icon: Icons.tag, label: 'ID', value: account.id),
+            AccountDetailRow(
+                icon: Icons.history,
+                label: 'Создан',
+                value: formatAccountTimestamp(account.createdAt)),
+            if (_error != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 10),
+                child: Text(
+                  'Не удалось изменить статус: $_error',
+                  style: const TextStyle(
+                      fontSize: 13, color: Color(0xFFFF3B30)),
+                ),
+              ),
+          ],
+        ),
+      ),
+      actions: [
+        if (!_locked)
+          TextButton(
+            style: TextButton.styleFrom(
+              foregroundColor:
+                  _enabled ? const Color(0xFFFF3B30) : const Color(0xFF248A3D),
+            ),
+            onPressed: _busy ? null : _toggle,
+            child: Text(_busy
+                ? 'Сохранение…'
+                : _enabled
+                    ? 'Отключить'
+                    : 'Включить'),
+          ),
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Закрыть'),
+        ),
+      ],
     );
   }
 }

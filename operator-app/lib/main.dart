@@ -14,6 +14,7 @@ import 'services/admin_repository.dart';
 import 'services/auth_service.dart';
 import 'services/api_operator_repository.dart';
 import 'services/operator_repository.dart';
+import 'widgets/account_profile_details.dart';
 import 'widgets/adaptivity.dart';
 
 void main() {
@@ -1075,22 +1076,30 @@ class _ProfileDialogState extends State<_ProfileDialog> {
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    _detail(Icons.alternate_email, 'Логин', account.username),
-                    _detail(
-                        Icons.shield_outlined,
-                        'Роль',
-                        account.role == 'ADMIN' ? 'Администратор' : 'Оператор'),
-                    _detail(
-                      Icons.verified_user_outlined,
-                      'Статус',
-                      account.enabled ? 'Активна' : 'Отключена',
+                    AccountDetailRow(
+                        icon: Icons.alternate_email,
+                        label: 'Логин',
+                        value: account.username),
+                    AccountDetailRow(
+                        icon: Icons.shield_outlined,
+                        label: 'Роль',
+                        value: account.role == 'ADMIN'
+                            ? 'Администратор'
+                            : 'Оператор'),
+                    AccountDetailRow(
+                      icon: Icons.verified_user_outlined,
+                      label: 'Статус',
+                      value: account.enabled ? 'Активна' : 'Отключена',
                       valueColor: account.enabled
                           ? const Color(0xFF248A3D)
                           : const Color(0xFFFF3B30),
                     ),
-                    _detail(Icons.tag, 'ID', account.id),
-                    _detail(Icons.history, 'Создан',
-                        _formatTimestamp(account.createdAt)),
+                    AccountDetailRow(
+                        icon: Icons.tag, label: 'ID', value: account.id),
+                    AccountDetailRow(
+                        icon: Icons.history,
+                        label: 'Создан',
+                        value: formatAccountTimestamp(account.createdAt)),
                   ],
                 );
               },
@@ -1141,43 +1150,6 @@ class _ProfileDialogState extends State<_ProfileDialog> {
           child: const Text('Закрыть'),
         ),
       ],
-    );
-  }
-
-  Widget _detail(
-    IconData icon,
-    String label,
-    String value, {
-    Color? valueColor,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, size: 18, color: const Color(0xFF6E6E73)),
-          const SizedBox(width: 8),
-          SizedBox(
-            width: 74,
-            child: Text(
-              label,
-              style: const TextStyle(fontSize: 13, color: Color(0xFF6E6E73)),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: valueColor ?? const Color(0xFF1D1D1F),
-              ),
-            ),
-          ),
-        ],
-      ),
     );
   }
 
