@@ -6,5 +6,10 @@ abstract interface class OperatorRepository {
 
   Future<List<Visitor>> fetchVisitors();
 
+  Future<List<Visitor>> fetchWhitelist();
+
   Future<void> confirmVisitor(String id);
+
+  /// Полное удаление посетителя (вместе с инцидентами) на сервере.
+  Future<void> removeVisitor(String id);
 }

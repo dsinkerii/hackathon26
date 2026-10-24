@@ -1,4 +1,4 @@
-import 'package:flutter/widgets.dart' show Size;
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:safe_playground_operator/main.dart';
 import 'package:safe_playground_operator/models/admin_account.dart';
@@ -20,7 +20,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('РАЗДЕЛЫ'), findsOneWidget);
-    expect(find.text('Все разделы'), findsOneWidget);
+    expect(find.text('Белый список'), findsOneWidget);
     expect(find.text('Уведомления'), findsOneWidget);
     expect(find.text('Видеопоток не подключён'), findsOneWidget);
     expect(tester.takeException(), isNull);
@@ -67,6 +67,40 @@ void main() {
 
     expect(repository.confirmedIds, ['visitor-1']);
     expect(find.text('В белом списке'), findsOneWidget);
+
+    // Подтверждённый посетитель появляется во вкладке «Белый список».
+    await tester.tap(find.byIcon(Icons.how_to_reg_outlined));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Посетитель 1'), findsOneWidget);
+    expect(find.text('Посетитель 2'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('whitelist visitor can be removed from the list',
+      (tester) async {
+    final repository = _FakeRepository();
+    await tester.pumpWidget(SafePlaygroundApp(repository: repository));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.how_to_reg_outlined));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Посетитель 2'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await tester.tap(find.byTooltip('Удалить из белого списка'));
+    await tester.pumpAndSettle();
+
+    expect(
+        find.text('Удалить из белого списка').evaluate().length, greaterThan(0));
+    await tester.tap(find.text('Удалить'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('В белом списке пока никого нет'),
+        findsOneWidget);
+    expect(repository.removedVisitorIds, ['visitor-2']);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('recording catalog opens from monitoring', (tester) async {
@@ -207,11 +241,36 @@ void main() {
 class _FakeRepository implements OperatorRepository, AdminRepository {
   final List<String> confirmedIds = [];
   bool _confirmed = false;
+  final List<String> removedVisitorIds = [];
+  bool _visitor2Removed = false;
 
   @override
   Future<void> confirmVisitor(String id) async {
     confirmedIds.add(id);
     _confirmed = true;
+  }
+
+  @override
+  Future<List<Visitor>> fetchWhitelist() async {
+    final all = await fetchVisitors();
+    return [
+      ...all.where((visitor) => visitor.isWhitelisted),
+      if (!_visitor2Removed)
+        Visitor(
+          id: 'visitor-2',
+          status: 'TRUSTED',
+          firstSeenAt: DateTime.utc(2026, 1, 2),
+          displayName: 'Посетитель 2',
+          visitCount: 5,
+          photoUrl: 'https://example.test/photo-2.jpg',
+        ),
+    ];
+  }
+
+  @override
+  Future<void> removeVisitor(String id) async {
+    removedVisitorIds.add(id);
+    if (id == 'visitor-2') _visitor2Removed = true;
   }
 
   @override

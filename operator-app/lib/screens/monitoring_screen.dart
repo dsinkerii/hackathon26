@@ -64,32 +64,9 @@ class _MonitoringScreenState extends State<MonitoringScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Мониторинг',
-                          style: Theme.of(context)
-                              .textTheme
-                              .headlineSmall
-                              ?.copyWith(fontWeight: FontWeight.w700),
-                        ),
-                        const SizedBox(height: 3),
-                        Text(
-                          'Состояние камер и последние события',
-                          style:
-                              Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                    color: const Color(0xFF6E6E73),
-                                  ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  _ServiceStatus(incidents: _latestIncidents),
-                ],
+              Align(
+                alignment: Alignment.centerRight,
+                child: _ServiceStatus(incidents: _latestIncidents),
               ),
               const SizedBox(height: 12),
               Expanded(

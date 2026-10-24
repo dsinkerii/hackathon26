@@ -1,11 +1,11 @@
 {
-    "name": "safe_playground_operator",
-    "short_name": "safe_playground_operator",
+    "name": "PlayGuard AI",
+    "short_name": "PlayGuard AI",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "description": "Панель безопасности детской площадки: камеры, инциденты, посетители и записи.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

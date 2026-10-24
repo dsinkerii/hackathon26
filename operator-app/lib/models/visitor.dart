@@ -17,6 +17,9 @@ class Visitor {
 
   bool get isPending => status == 'PENDING' || status == 'НА_РАССМОТРЕНИИ';
 
+  /// Все не-ожидающие посетители считаются подтверждёнными (белый список).
+  bool get isWhitelisted => !isPending;
+
   factory Visitor.fromJson(Map<String, dynamic> json) {
     final id = json['id'];
     final status = json['status'];

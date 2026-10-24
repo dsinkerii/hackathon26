@@ -10,6 +10,7 @@ import 'screens/login_screen.dart';
 import 'screens/monitoring_screen.dart';
 import 'screens/recordings_screen.dart';
 import 'screens/visitors_screen.dart';
+import 'screens/whitelist_screen.dart';
 import 'services/admin_repository.dart';
 import 'services/auth_service.dart';
 import 'services/api_operator_repository.dart';
@@ -33,7 +34,7 @@ class SafePlaygroundApp extends StatelessWidget {
         repository ?? ApiOperatorRepository.fromEnvironment();
 
     return MaterialApp(
-      title: 'Безопасная площадка',
+      title: 'PlayGuard AI',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
@@ -257,14 +258,13 @@ class OperatorShell extends StatefulWidget {
 class _OperatorShellState extends State<OperatorShell> {
   int _selectedIndex = 0;
 
-  @override
-  Widget build(BuildContext context) {
-    final desktop = MediaQuery.sizeOf(context).width >= 960;
+  /// Полный перечень вкладок нижней навигации (индекс = позиция раздела).
+  List<NavigationDestination> get _destinations {
     final adminRepository = widget.repository is AdminRepository
         ? widget.repository as AdminRepository
         : null;
     final isAdmin = widget.session?.isAdmin ?? adminRepository != null;
-    final destinations = <NavigationDestination>[
+    return <NavigationDestination>[
       const NavigationDestination(
         icon: Icon(Icons.videocam_outlined),
         selectedIcon: Icon(Icons.videocam),
@@ -279,6 +279,11 @@ class _OperatorShellState extends State<OperatorShell> {
         icon: Icon(Icons.people_outline),
         selectedIcon: Icon(Icons.people),
         label: 'Посетители',
+      ),
+      const NavigationDestination(
+        icon: Icon(Icons.how_to_reg_outlined),
+        selectedIcon: Icon(Icons.how_to_reg),
+        label: 'Белый список',
       ),
       if (adminRepository != null) ...[
         const NavigationDestination(
@@ -299,40 +304,75 @@ class _OperatorShellState extends State<OperatorShell> {
           label: 'Доступ',
         ),
     ];
-    final currentPage = switch (_selectedIndex) {
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final desktop = MediaQuery.sizeOf(context).width >= 960;
+    final adminRepository = widget.repository is AdminRepository
+        ? widget.repository as AdminRepository
+        : null;
+    final isAdmin = widget.session?.isAdmin ?? adminRepository != null;
+    final destinations = _destinations;    final currentPage = switch (_selectedIndex) {
       0 => MonitoringScreen(
           repository: widget.repository,
           onOpenRecordings:
-              adminRepository == null ? null : () => _selectTab(3),
+              adminRepository == null ? null : () => _selectTab(4),
         ),
       1 => IncidentsScreen(repository: widget.repository),
       2 => VisitorsScreen(repository: widget.repository),
-      3 when adminRepository != null =>
-        RecordingsScreen(repository: adminRepository, isAdmin: isAdmin),
+      3 => WhitelistScreen(repository: widget.repository),
       4 when adminRepository != null =>
+        RecordingsScreen(repository: adminRepository, isAdmin: isAdmin),
+      5 when adminRepository != null =>
         CamerasScreen(repository: adminRepository, isAdmin: isAdmin),
-      5 when adminRepository != null && isAdmin => AdminAccountsScreen(
+      6 when adminRepository != null && isAdmin => AdminAccountsScreen(
           repository: adminRepository,
           currentUsername: widget.session?.username,
         ),
       _ => const SizedBox.shrink(),
     };
 
+    // В сайдбаре белый список заменяет кнопку «Все разделы»,
+    // поэтому из перечня РАЗДЕЛЫ он исключается (доступен по кнопке выше).
+    final sidebarDestinations = <MapEntry<int, NavigationDestination>>[
+      for (var i = 0; i < destinations.length; i++)
+        if (i != 3) MapEntry(i, destinations[i]),
+    ];
+
     if (desktop) {
       return _MacDesktopWorkspace(
         selectedIndex: _selectedIndex,
-        destinations: destinations,
+        destinations: sidebarDestinations,
         currentPage: currentPage,
         session: widget.session,
         adminRepository: adminRepository,
         onSelect: _selectTab,
+        onWhitelistTap: () => _selectTab(3),
         onNotifications: () => _showNotifications(context),
         onLogout: widget.onLogout,
       );
     }
 
-    final narrow = MediaQuery.sizeOf(context).width < 760;
-    final showSessionPill = MediaQuery.sizeOf(context).width >= 600;
+    final width = MediaQuery.sizeOf(context).width;
+    final showSessionPill = width >= 600;
+    // Горизонтальные минимумы нижней навигации: подписи требуют ~102px
+    // на раздел, только иконки — 64px. На узких телефонах бар собирается
+    // из компактных иконных кнопок (см. _compactBottomBar).
+    final showLabels = width >= destinations.length * 102;
+    final barFits = width >= destinations.length * 64;
+
+    final bottomBar = NavigationBar(
+      selectedIndex: _selectedIndex,
+      onDestinationSelected: _selectTab,
+      labelBehavior: showLabels
+          ? NavigationDestinationLabelBehavior.alwaysShow
+          : NavigationDestinationLabelBehavior.alwaysHide,
+      destinations: destinations,
+    );
+    final bottomNavigationBar = barFits
+        ? bottomBar
+        : _compactBottomBar();
 
     return Scaffold(
       appBar: AppBar(
@@ -352,7 +392,7 @@ class _OperatorShellState extends State<OperatorShell> {
             ),
             SizedBox(width: 12),
             Flexible(
-              child: Text('Безопасная площадка',
+              child: Text('PlayGuard AI',
                   maxLines: 1, overflow: TextOverflow.ellipsis),
             ),
           ],
@@ -417,13 +457,37 @@ class _OperatorShellState extends State<OperatorShell> {
         ],
       ),
       body: SafeArea(child: currentPage),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _selectedIndex,
-        onDestinationSelected: _selectTab,
-        labelBehavior: narrow
-            ? NavigationDestinationLabelBehavior.alwaysHide
-            : NavigationDestinationLabelBehavior.alwaysShow,
-        destinations: destinations,
+      bottomNavigationBar: bottomNavigationBar,
+    );
+  }
+
+  /// Компактная нижняя навигация для узких экранов: иконки вместо вкладок.
+  Widget _compactBottomBar() {
+    final scheme = Theme.of(context).colorScheme;
+    final destinations = _destinations;
+    return Material(
+      color: scheme.surfaceContainerHighest,
+      child: SafeArea(
+        top: false,
+        child: Row(
+          children: [
+            for (var i = 0; i < destinations.length; i++)
+              Expanded(
+                child: IconButton(
+                  tooltip: destinations[i].label,
+                  isSelected: _selectedIndex == i,
+                  icon: destinations[i].icon,
+                  selectedIcon:
+                      destinations[i].selectedIcon ?? destinations[i].icon,
+                  color: _selectedIndex == i
+                      ? scheme.primary
+                      : scheme.onSurfaceVariant,
+                  visualDensity: VisualDensity.compact,
+                  onPressed: () => _selectTab(i),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -513,16 +577,18 @@ class _MacDesktopWorkspace extends StatelessWidget {
     required this.session,
     this.adminRepository,
     required this.onSelect,
+    required this.onWhitelistTap,
     required this.onNotifications,
     required this.onLogout,
   });
 
   final int selectedIndex;
-  final List<NavigationDestination> destinations;
+  final List<MapEntry<int, NavigationDestination>> destinations;
   final Widget currentPage;
   final AdminSession? session;
   final AdminRepository? adminRepository;
   final ValueChanged<int> onSelect;
+  final VoidCallback onWhitelistTap;
   final VoidCallback onNotifications;
   final Future<void> Function()? onLogout;
 
@@ -536,6 +602,7 @@ class _MacDesktopWorkspace extends StatelessWidget {
             selectedIndex: selectedIndex,
             destinations: destinations,
             onSelect: onSelect,
+            onWhitelistTap: onWhitelistTap,
             onNotifications: onNotifications,
             onLogout: onLogout,
           ),
@@ -562,13 +629,15 @@ class _MacSidebar extends StatelessWidget {
     required this.selectedIndex,
     required this.destinations,
     required this.onSelect,
+    required this.onWhitelistTap,
     required this.onNotifications,
     required this.onLogout,
   });
 
   final int selectedIndex;
-  final List<NavigationDestination> destinations;
+  final List<MapEntry<int, NavigationDestination>> destinations;
   final ValueChanged<int> onSelect;
+  final VoidCallback onWhitelistTap;
   final VoidCallback onNotifications;
   final Future<void> Function()? onLogout;
 
@@ -623,9 +692,9 @@ class _MacSidebar extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 11),
             child: _MacSidebarRow(
-              icon: Icons.all_inbox_outlined,
-              label: 'Все разделы',
-              onTap: () => onSelect(0),
+              icon: Icons.how_to_reg_outlined,
+              label: 'Белый список',
+              onTap: onWhitelistTap,
             ),
           ),
           Padding(
@@ -654,12 +723,12 @@ class _MacSidebar extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 9),
               itemCount: destinations.length,
               itemBuilder: (context, index) {
-                final destination = destinations[index];
+                final entry = destinations[index];
                 return _MacSidebarRow(
-                  icon: _sidebarIconFor(destination),
-                  label: destination.label,
-                  selected: selectedIndex == index,
-                  onTap: () => onSelect(index),
+                  icon: _sidebarIconFor(entry.value),
+                  label: entry.value.label,
+                  selected: selectedIndex == entry.key,
+                  onTap: () => onSelect(entry.key),
                 );
               },
             ),
@@ -901,7 +970,7 @@ class _MacInspector extends StatelessWidget {
                     SizedBox(width: 7),
                     Expanded(
                       child: Text(
-                        'Безопасная площадка',
+                        'PlayGuard AI',
                         style: TextStyle(
                           fontSize: 10,
                           height: 1.35,
@@ -1127,7 +1196,7 @@ class _ProfileDialogState extends State<_ProfileDialog> {
             ],
             const SizedBox(height: 8),
             const Text(
-              'Рабочее место: Безопасная площадка',
+              'Рабочее место: PlayGuard AI',
               style: TextStyle(fontSize: 13),
             ),
           ],

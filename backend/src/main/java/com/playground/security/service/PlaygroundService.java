@@ -44,8 +44,20 @@ public class PlaygroundService {
     }
 
     @Transactional(readOnly = true)
-    public List<Person> persons() {
-        return personRepository.findAllByOrderByLastSeenAtDesc();
+    public List<Person> persons(String status) {
+        if (status == null || status.isBlank()) {
+            return personRepository.findAllByOrderByLastSeenAtDesc();
+        }
+        PersonStatus parsed;
+        try {
+            parsed = PersonStatus.valueOf(status.trim().toUpperCase());
+        } catch (IllegalArgumentException ex) {
+            throw new ApiException(
+                    HttpStatus.BAD_REQUEST,
+                    "INVALID_STATUS",
+                    "Unknown person status: " + status);
+        }
+        return personRepository.findAllByStatusOrderByLastSeenAtDesc(parsed);
     }
 
     @Transactional
@@ -105,6 +117,16 @@ public class PlaygroundService {
                 .orElseThrow(() -> new ApiException(
                         HttpStatus.NOT_FOUND, "PERSON_NOT_FOUND", "Person was not found."));
         person.confirm();
+    }
+
+    /** Полное удаление посетителя: сначала инциденты (FK), затем сама запись. */
+    @Transactional
+    public void deletePerson(String id) {
+        Person person = personRepository.findById(id)
+                .orElseThrow(() -> new ApiException(
+                        HttpStatus.NOT_FOUND, "PERSON_NOT_FOUND", "Person was not found."));
+        incidentRepository.deleteByPersonId(person.getId());
+        personRepository.delete(person);
     }
 
     private String defaultDescription(String type) {

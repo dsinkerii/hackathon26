@@ -78,6 +78,27 @@ class ApiOperatorRepository implements OperatorRepository, AdminRepository {
       );
 
   @override
+  Future<List<Visitor>> fetchWhitelist() async {
+    final json = await _getJson(
+      '/api/v1/persons',
+      query: const {'status': 'TRUSTED'},
+    );
+    return _parseList(
+      json,
+      (item) => Visitor.fromJson({
+        ...item,
+        'photoUrl': _resolveMediaUrl(item['photoUrl']),
+      }),
+    );
+  }
+
+  @override
+  Future<void> removeVisitor(String id) => _expectSuccess(
+        _request('DELETE', '/api/v1/persons/${Uri.encodeComponent(id)}'),
+        'Не удалось удалить посетителя из белого списка',
+      );
+
+  @override
   Future<List<Camera>> fetchCameras() async =>
       _parseList(await _getJson('/api/v1/cameras'), Camera.fromJson);
 

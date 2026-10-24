@@ -103,7 +103,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                           SizedBox(height: 26),
                           Text(
-                            'Безопасная площадка',
+                            'PlayGuard AI',
                             style: TextStyle(
                               color: Colors.white,
                               fontSize: 27,
