@@ -17,7 +17,6 @@ public interface RecordingRepository extends JpaRepository<Recording, String>,
     static Specification<Recording> byFilters(
             String cameraId,
             Boolean withoutCamera,
-            boolean includeHidden,
             OffsetDateTime from,
             OffsetDateTime to) {
         return (root, query, builder) -> {
@@ -26,7 +25,9 @@ public interface RecordingRepository extends JpaRepository<Recording, String>,
                 filters.add(builder.isNull(root.get("camera")));
             } else if (cameraId != null && !cameraId.isBlank()) {
                 filters.add(builder.equal(root.get("camera").get("id"), cameraId));
-            } else if (!includeHidden) {
+            } else {
+                // The no-camera category is separate: the default list only
+                // shows recordings bound to a camera, even for administrators.
                 filters.add(root.get("camera").isNotNull());
             }
             if (from != null) {

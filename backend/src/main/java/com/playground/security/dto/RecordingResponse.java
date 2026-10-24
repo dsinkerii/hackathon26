@@ -1,5 +1,6 @@
 package com.playground.security.dto;
 
+import com.playground.security.entity.Camera;
 import com.playground.security.entity.Recording;
 import java.time.OffsetDateTime;
 

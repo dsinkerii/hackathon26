@@ -60,7 +60,7 @@ public class RecordingController {
         }
         return recordings.findAll(
                         RecordingRepository.byFilters(
-                                cameraId, withoutCamera, admin, from, to),
+                                cameraId, withoutCamera, from, to),
                         Sort.by(Sort.Direction.DESC, "recordedAt"))
                 .stream().map(RecordingResponse::from).toList();
     }
