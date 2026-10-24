@@ -4,15 +4,15 @@ import cv2
 from ultralytics import YOLO
 
 #variables(or smth)
-webcam_n = int(input("Enter the number of webcam number for testing(-1 = in-code URL): "))
+webcam_n = input("Enter the number of webcam number for testing(URL = in-code URL): ")
 # can use several webcams for test, so have to switch between
 
 url = None # <-------------- Dsinkerii put your API stuff here pls pls pls pls
 
-if webcam_n == -1:
+if webcam_n == 'URL':
     source = url
 else:
-    source = webcam_n
+    source = int(webcam_n)
 
 #functions
 
