@@ -1,7 +1,10 @@
+import '../models/camera.dart';
 import '../models/incident.dart';
 import '../models/visitor.dart';
 
 abstract interface class OperatorRepository {
+  Future<List<Camera>> fetchCameras();
+
   Future<List<Incident>> fetchIncidents();
 
   Future<List<Visitor>> fetchVisitors();

@@ -88,8 +88,11 @@ public class CameraController {
             throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_URL", "URL is invalid.");
         }
         if (!uri.isAbsolute() || uri.getHost() == null
-                || !(uri.getScheme().equalsIgnoreCase("http") || uri.getScheme().equalsIgnoreCase("https"))) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_URL", "URL must use HTTP or HTTPS.");
+                || !(uri.getScheme().equalsIgnoreCase("http")
+                        || uri.getScheme().equalsIgnoreCase("https")
+                        || uri.getScheme().equalsIgnoreCase("rtsp")
+                        || uri.getScheme().equalsIgnoreCase("rtsps"))) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_URL", "URL must use HTTP, HTTPS, or RTSP.");
         }
         return uri.toString();
     }

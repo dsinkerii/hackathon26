@@ -310,15 +310,19 @@ class _CameraEditorState extends State<_CameraEditor> {
                   controller: _streamUrl,
                   decoration: const InputDecoration(
                     labelText: 'URL видеопотока (необязательно)',
-                    hintText: 'https://camera.example/stream',
+                    hintText: 'rtsp://camera.example/stream',
                   ),
-                  validator: (value) => value != null &&
-                          value.isNotEmpty &&
-                          !(Uri.tryParse(value)?.hasAuthority == true &&
-                              const {'http', 'https'}
-                                  .contains(Uri.tryParse(value)?.scheme))
-                      ? 'Укажите абсолютный URL'
-                      : null,
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) return null;
+                    final uri = Uri.tryParse(value.trim());
+                    if (uri == null ||
+                        !uri.hasAuthority ||
+                        !const {'http', 'https', 'rtsp', 'rtsps'}
+                            .contains(uri.scheme.toLowerCase())) {
+                      return 'Укажите абсолютный URL (HTTP, HTTPS или RTSP)';
+                    }
+                    return null;
+                  },
                 ),
                 if (widget.camera != null)
                   SwitchListTile(

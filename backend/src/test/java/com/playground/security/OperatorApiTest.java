@@ -145,10 +145,11 @@ class OperatorApiTest {
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"name":"North gate","location":"Main entrance","enabled":true}
+                                {"name":"North gate","location":"Main entrance","streamUrl":"rtsp://127.0.0.1:8554/test","enabled":true}
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.name").value("North gate"))
+                .andExpect(jsonPath("$.streamUrl").value("rtsp://127.0.0.1:8554/test"))
                 .andReturn().getResponse().getContentAsString();
         String cameraId = objectMapper.readTree(cameraJson).get("id").asText();
 

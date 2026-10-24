@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
+import '../models/camera.dart';
 import '../models/incident.dart';
 import '../services/operator_repository.dart';
+import '../widgets/camera_view.dart';
 
 class MonitoringScreen extends StatefulWidget {
   const MonitoringScreen({
@@ -19,16 +22,19 @@ class MonitoringScreen extends StatefulWidget {
 
 class _MonitoringScreenState extends State<MonitoringScreen> {
   late Future<List<Incident>> _latestIncidents;
+  late Future<List<Camera>> _cameras;
 
   @override
   void initState() {
     super.initState();
     _latestIncidents = widget.repository.fetchIncidents();
+    _cameras = widget.repository.fetchCameras();
   }
 
   void _refresh() {
     setState(() {
       _latestIncidents = widget.repository.fetchIncidents();
+      _cameras = widget.repository.fetchCameras();
     });
   }
 
@@ -52,7 +58,9 @@ class _MonitoringScreenState extends State<MonitoringScreen> {
         final padding = compact ? 12.0 : 20.0;
         final videoPanel = _CameraPanel(
           compact: compact,
+          cameras: _cameras,
           onOpenRecordings: _openRecordings,
+          onRefresh: _refresh,
         );
         final activityPanel = _ActivityPanel(
           incidents: _latestIncidents,
@@ -139,14 +147,25 @@ class _ServiceStatus extends StatelessWidget {
   }
 }
 
-class _CameraPanel extends StatelessWidget {
+class _CameraPanel extends StatefulWidget {
   const _CameraPanel({
     required this.compact,
+    required this.cameras,
     required this.onOpenRecordings,
+    required this.onRefresh,
   });
 
   final bool compact;
+  final Future<List<Camera>> cameras;
   final VoidCallback onOpenRecordings;
+  final VoidCallback onRefresh;
+
+  @override
+  State<_CameraPanel> createState() => _CameraPanelState();
+}
+
+class _CameraPanelState extends State<_CameraPanel> {
+  String? _selectedCameraId;
 
   @override
   Widget build(BuildContext context) {
@@ -163,74 +182,197 @@ class _CameraPanel extends StatelessWidget {
               ),
               borderRadius: BorderRadius.circular(16),
             ),
-            child: Stack(
-              children: [
-                Positioned(
-                  top: 18,
-                  left: 18,
-                  child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: const Color(0x26FFFFFF),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.videocam_outlined,
-                            size: 15, color: Colors.white70),
-                        SizedBox(width: 6),
-                        Text(
-                          'ОБЗОР КАМЕР',
-                          style: TextStyle(
-                            color: Colors.white70,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 0.7,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: FutureBuilder<List<Camera>>(
+                future: widget.cameras,
+                builder: (context, snapshot) {
+                  final cameras = snapshot.data ?? const <Camera>[];
+                  final streamingCameras = cameras
+                      .where((c) =>
+                          c.enabled &&
+                          c.streamUrl != null &&
+                          c.streamUrl!.trim().isNotEmpty)
+                      .toList();
+
+                  Camera? activeCamera;
+                  if (streamingCameras.isNotEmpty) {
+                    activeCamera = streamingCameras.firstWhere(
+                      (c) => c.id == _selectedCameraId,
+                      orElse: () => streamingCameras.first,
+                    );
+                  }
+
+                  final streamUrl = activeCamera?.streamUrl?.trim();
+                  final hasStream = activeCamera != null &&
+                      streamUrl != null &&
+                      streamUrl.isNotEmpty;
+
+                  return Stack(
                     children: [
-                      DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: Color(0x1FFFFFFF),
-                          shape: BoxShape.circle,
+                      Positioned.fill(
+                        child: hasStream
+                            ? _LiveCameraPlayer(
+                                streamUrl: streamUrl,
+                                cameraName: activeCamera.name,
+                              )
+                            : const Center(
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    DecoratedBox(
+                                      decoration: BoxDecoration(
+                                        color: Color(0x1FFFFFFF),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: Padding(
+                                        padding: EdgeInsets.all(18),
+                                        child: Icon(
+                                          Icons.videocam_off_outlined,
+                                          color: Colors.white70,
+                                          size: 34,
+                                        ),
+                                      ),
+                                    ),
+                                    SizedBox(height: 14),
+                                    Text(
+                                      'Видеопоток не подключён',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    SizedBox(height: 5),
+                                    Text(
+                                      'Добавьте камеру, чтобы начать мониторинг',
+                                      style: TextStyle(
+                                        color: Color(0xFFB7B7BC),
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                      ),
+                      Positioned(
+                        top: 18,
+                        left: 18,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: const Color(0x66000000),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.videocam_outlined,
+                                      size: 15, color: Colors.white70),
+                                  SizedBox(width: 6),
+                                  Text(
+                                    'ОБЗОР КАМЕР',
+                                    style: TextStyle(
+                                      color: Colors.white70,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w600,
+                                      letterSpacing: 0.7,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            if (hasStream) ...[
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xCCB00020),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.fiber_manual_record,
+                                        size: 10, color: Colors.white),
+                                    SizedBox(width: 4),
+                                    Text(
+                                      'В ЭФИРЕ',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w700,
+                                        letterSpacing: 0.5,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 5),
+                                decoration: BoxDecoration(
+                                  color: const Color(0x66000000),
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                child: Text(
+                                  activeCamera.name,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
-                        child: Padding(
-                          padding: EdgeInsets.all(18),
-                          child: Icon(
-                            Icons.videocam_off_outlined,
-                            color: Colors.white70,
-                            size: 34,
+                      ),
+                      if (streamingCameras.length > 1)
+                        Positioned(
+                          top: 14,
+                          right: 18,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: const Color(0x99000000),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: DropdownButtonHideUnderline(
+                              child: DropdownButton<String>(
+                                value: activeCamera?.id,
+                                dropdownColor: const Color(0xFF25252A),
+                                icon: const Icon(Icons.arrow_drop_down,
+                                    color: Colors.white70),
+                                style: const TextStyle(
+                                    color: Colors.white, fontSize: 12),
+                                items: [
+                                  for (final cam in streamingCameras)
+                                    DropdownMenuItem(
+                                      value: cam.id,
+                                      child: Text(cam.name),
+                                    ),
+                                ],
+                                onChanged: (id) {
+                                  if (id != null) {
+                                    setState(() => _selectedCameraId = id);
+                                  }
+                                },
+                              ),
+                            ),
                           ),
                         ),
-                      ),
-                      SizedBox(height: 14),
-                      Text(
-                        'Видеопоток не подключён',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      SizedBox(height: 5),
-                      Text(
-                        'Добавьте камеру, чтобы начать мониторинг',
-                        style:
-                            TextStyle(color: Color(0xFFB7B7BC), fontSize: 13),
-                      ),
                     ],
-                  ),
-                ),
-              ],
+                  );
+                },
+              ),
             ),
           ),
         ),
@@ -238,12 +380,150 @@ class _CameraPanel extends StatelessWidget {
         Align(
           alignment: Alignment.centerLeft,
           child: OutlinedButton.icon(
-            onPressed: onOpenRecordings,
+            onPressed: widget.onOpenRecordings,
             icon: const Icon(Icons.video_library_outlined),
-            label: Text(compact ? 'Записи' : 'Записи видео'),
+            label: Text(widget.compact ? 'Записи' : 'Записи видео'),
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Live camera panel.
+///
+/// The camera is served as MJPEG (`http://<host>:8090/stream.mjpg`) by
+/// `cv_branch/camera_hub.py`, which also feeds the CV service. Browsers render
+/// that in a plain `<img>`; desktop builds use media_kit.
+class _LiveCameraPlayer extends StatefulWidget {
+  const _LiveCameraPlayer({
+    required this.streamUrl,
+    required this.cameraName,
+  });
+
+  final String streamUrl;
+  final String cameraName;
+
+  @override
+  State<_LiveCameraPlayer> createState() => _LiveCameraPlayerState();
+}
+
+class _LiveCameraPlayerState extends State<_LiveCameraPlayer> {
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _validate();
+  }
+
+  @override
+  void didUpdateWidget(covariant _LiveCameraPlayer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.streamUrl != widget.streamUrl) {
+      _validate();
+    }
+  }
+
+  void _validate() {
+    final raw = widget.streamUrl.trim();
+    final uri = Uri.tryParse(raw);
+    if (uri == null || !uri.hasScheme) {
+      setState(() => _error = 'Некорректный адрес потока: $raw');
+      return;
+    }
+    if (kIsWeb && (uri.scheme == 'rtsp' || uri.scheme == 'rtsps')) {
+      setState(() {
+        _error = 'Браузер не умеет воспроизводить RTSP. '
+            'Укажите MJPEG-адрес камеры, например '
+            'http://127.0.0.1:8090/stream.mjpg';
+      });
+      return;
+    }
+    setState(() => _error = null);
+  }
+
+  void _retry() {
+    setState(() => _error = null);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final error = _error;
+    if (error != null) {
+      return _PlayerMessage(
+        icon: Icons.error_outline,
+        title: 'Не удалось запустить видеопоток',
+        message: error,
+        onRetry: _retry,
+      );
+    }
+
+    return CameraView(
+      key: ValueKey(widget.streamUrl),
+      url: widget.streamUrl,
+      fit: BoxFit.cover,
+      onError: (message) {
+        if (!mounted) return;
+        setState(() => _error = message);
+      },
+    );
+  }
+}
+
+class _PlayerMessage extends StatelessWidget {
+  const _PlayerMessage({
+    required this.icon,
+    required this.title,
+    required this.message,
+    required this.onRetry,
+  });
+
+  final IconData icon;
+  final String title;
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: Colors.orangeAccent, size: 36),
+            const SizedBox(height: 10),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+                fontSize: 15,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              message,
+              style: const TextStyle(color: Colors.white70, fontSize: 12),
+              textAlign: TextAlign.center,
+              maxLines: 4,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh, size: 16),
+              label: const Text('Повторить'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.white,
+                side: const BorderSide(color: Colors.white24),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -259,99 +539,103 @@ class _ActivityPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      margin: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Theme.of(context).dividerColor),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 16, 18, 10),
+            child: Row(
               children: [
-                Expanded(
+                const Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Последние события',
-                        style: Theme.of(context)
-                            .textTheme
-                            .titleMedium
-                            ?.copyWith(fontWeight: FontWeight.w700),
-                      ),
-                      const SizedBox(height: 2),
-                      const Text(
-                        'Активность системы',
+                        'События',
                         style: TextStyle(
-                          color: Color(0xFF8E8E93),
-                          fontSize: 12,
-                        ),
+                            fontSize: 16, fontWeight: FontWeight.w600),
+                      ),
+                      SizedBox(height: 2),
+                      Text(
+                        'Последние инциденты',
+                        style: TextStyle(color: Color(0xFF6B6B6F), fontSize: 12),
                       ),
                     ],
                   ),
                 ),
                 IconButton(
                   onPressed: onRefresh,
-                  tooltip: 'Обновить',
                   icon: const Icon(Icons.refresh),
-                  visualDensity: VisualDensity.compact,
+                  tooltip: 'Обновить',
                 ),
               ],
             ),
-            Expanded(
-              child: FutureBuilder<List<Incident>>(
-                future: incidents,
-                builder: (context, snapshot) {
-                  if (snapshot.hasError) {
-                    return Center(
-                      child: Text(
-                        'События недоступны.\n${snapshot.error}',
-                        textAlign: TextAlign.center,
-                        maxLines: 4,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    );
-                  }
-                  if (!snapshot.hasData) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-                  final latest = snapshot.data!.take(4).toList();
-                  if (latest.isEmpty) {
-                    return const Center(
-                      child: Text(
-                        'Новых событий пока нет',
-                        textAlign: TextAlign.center,
-                      ),
-                    );
-                  }
-                  return ListView(
-                    children: latest
-                        .map(
-                          (incident) => ListTile(
-                            contentPadding: EdgeInsets.zero,
-                            dense: true,
-                            leading:
-                                const Icon(Icons.notifications_active_outlined),
-                            title: Text(
-                              incident.type,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            subtitle: Text(
-                              incident.occurredAt.toLocal().toString(),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        )
-                        .toList(),
+          ),
+          const Divider(height: 1),
+          Expanded(
+            child: FutureBuilder<List<Incident>>(
+              future: incidents,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting &&
+                    !snapshot.hasData) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                if (snapshot.hasError) {
+                  return Padding(
+                    padding: const EdgeInsets.all(18.0),
+                    child: Text(
+                      'Не удалось загрузить события: ${snapshot.error}',
+                      style: const TextStyle(color: Color(0xFF6B6B6F)),
+                    ),
                   );
-                },
-              ),
+                }
+                final items = snapshot.data ?? const <Incident>[];
+                if (items.isEmpty) {
+                  return const Center(
+                    child: Text(
+                      'Событий пока нет',
+                      style: TextStyle(color: Color(0xFF6B6B6F)),
+                    ),
+                  );
+                }
+                return ListView.separated(
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  itemCount: items.length,
+                  separatorBuilder: (_, __) => const Divider(height: 1),
+                  itemBuilder: (context, index) {
+                    final incident = items[index];
+                    return ListTile(
+                      leading: CircleAvatar(
+                        backgroundColor: const Color(0xFFF2F2F7),
+                        child: Icon(
+                          incident.type == 'INTRUSION'
+                              ? Icons.warning_amber_rounded
+                              : Icons.person_outline,
+                          color: const Color(0xFF8E8E93),
+                        ),
+                      ),
+                      title: Text(incident.description ?? incident.type),
+                      subtitle: Text(_formatDateTime(incident.occurredAt)),
+                      dense: true,
+                    );
+                  },
+                );
+              },
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
+  }
+
+  String _formatDateTime(DateTime time) {
+    String two(int v) => v.toString().padLeft(2, '0');
+    return '${two(time.day)}.${two(time.month)}.${time.year} ${two(time.hour)}:${two(time.minute)}';
   }
 }

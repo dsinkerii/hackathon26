@@ -4,7 +4,11 @@ services:
     environment:
       POSTGRES_DB: playground
       POSTGRES_USER: playground
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in the environment}
+      POSTGRES_PASSWORD: playground
+      INGEST_API_TOKEN: playground
+      JWT_SECRET: playgroundplaygroundplaygroundplayground
+      INITIAL_ADMIN_USERNAME: playground
+      INITIAL_ADMIN_PASSWORD: playground
     ports:
       - "5432:5432"
     volumes:

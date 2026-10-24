@@ -6,6 +6,7 @@ import 'package:safe_playground_operator/models/camera.dart';
 import 'package:safe_playground_operator/models/incident.dart';
 import 'package:safe_playground_operator/models/video_recording.dart';
 import 'package:safe_playground_operator/models/visitor.dart';
+import 'package:safe_playground_operator/screens/cameras_screen.dart';
 import 'package:safe_playground_operator/services/admin_repository.dart';
 import 'package:safe_playground_operator/services/operator_repository.dart';
 import 'package:safe_playground_operator/theme/app_theme.dart';
@@ -367,6 +368,55 @@ void main() {
     expect(find.byType(NavigationBar), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('cameras screen allows adding camera with rtsp url',
+      (tester) async {
+    final repo = _FakeRepository();
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: CamerasScreen(repository: repo, isAdmin: true),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Добавить камеру'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+        find.widgetWithText(TextFormField, 'Название'), 'Тест RTSP');
+    await tester.enterText(
+        find.widgetWithText(TextFormField, 'URL видеопотока (необязательно)'),
+        'rtsp://127.0.0.1:8554/test');
+    await tester.tap(find.text('Сохранить'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Укажите абсолютный URL (HTTP, HTTPS или RTSP)'),
+        findsNothing);
+  });
+
+  testWidgets('monitoring screen displays live camera indicator for streamed cameras',
+      (tester) async {
+    final repo = _StreamFakeRepository();
+    await tester.pumpWidget(SafePlaygroundApp(repository: repo));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(find.text('В ЭФИРЕ'), findsOneWidget);
+    expect(find.text('Уличная камера'), findsOneWidget);
+  });
+}
+
+class _StreamFakeRepository extends _FakeRepository {
+  @override
+  Future<List<Camera>> fetchCameras() async => [
+        const Camera(
+          id: 'camera-stream',
+          name: 'Уличная камера',
+          location: 'Площадка',
+          streamUrl: 'https://example.com/stream.m3u8',
+          enabled: true,
+        ),
+      ];
 }
 
 class _FakeRepository implements OperatorRepository, AdminRepository {

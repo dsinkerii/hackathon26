@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:media_kit/media_kit.dart';
 
 import 'models/admin_account.dart';
 import 'models/incident.dart';
@@ -20,6 +21,8 @@ import 'widgets/account_profile_details.dart';
 import 'widgets/adaptivity.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  MediaKit.ensureInitialized();
   runApp(const SafePlaygroundApp());
 }
 

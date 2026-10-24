@@ -30,7 +30,7 @@ class ApiOperatorRepository implements OperatorRepository, AdminRepository {
   static Uri baseUriFromEnvironment() {
     const baseUrl = String.fromEnvironment(
       'API_BASE_URL',
-      defaultValue: 'http://localhost:8080',
+      defaultValue: 'http://localhost:8086',
     );
     final uri = Uri.tryParse(baseUrl);
     if (uri == null || !uri.hasAuthority || !uri.hasScheme) {
