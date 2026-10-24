@@ -49,6 +49,13 @@ public class IncidentController {
         return ResponseEntity.noContent().build();
     }
 
+    /** Исключение из белого списка: посетитель возвращается в статус на рассмотрении. */
+    @PostMapping("/persons/{id}/revoke")
+    public ResponseEntity<Void> revokePerson(@PathVariable String id) {
+        service.revokePerson(id);
+        return ResponseEntity.noContent().build();
+    }
+
     /** Удаление посетителя (например, из белого списка) вместе с его инцидентами. */
     @DeleteMapping("/persons/{id}")
     public ResponseEntity<Void> deletePerson(@PathVariable String id) {

@@ -10,6 +10,9 @@ abstract interface class OperatorRepository {
 
   Future<void> confirmVisitor(String id);
 
+  /// Возвращает посетителя в статус на рассмотрении (вне белого списка).
+  Future<void> excludeVisitor(String id);
+
   /// Полное удаление посетителя (вместе с инцидентами) на сервере.
   Future<void> removeVisitor(String id);
 }

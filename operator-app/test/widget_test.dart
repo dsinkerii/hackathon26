@@ -74,10 +74,26 @@ void main() {
 
     expect(find.text('Посетитель 1'), findsOneWidget);
     expect(find.text('Посетитель 2'), findsOneWidget);
+
+    // Исключение возвращает посетителя в статус «на рассмотрении».
+    final excludeForVisitor1 = find.descendant(
+      of: find.ancestor(
+          of: find.text('Посетитель 1'), matching: find.byType(ListTile)),
+      matching: find.byTooltip('Исключить из белого списка'),
+    );
+    await tester.tap(excludeForVisitor1);
+    await tester.pumpAndSettle();
+
+    expect(repository.excludedVisitorIds, ['visitor-1']);
+    expect(find.text('Посетитель 1'), findsNothing);
+
+    await tester.tap(find.byIcon(Icons.people_outline));
+    await tester.pumpAndSettle();
+    expect(find.text('Добавить в белый список'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('whitelist visitor can be removed from the list',
+  testWidgets('whitelist visitor can be deleted from the list',
       (tester) async {
     final repository = _FakeRepository();
     await tester.pumpWidget(SafePlaygroundApp(repository: repository));
@@ -89,11 +105,10 @@ void main() {
     expect(find.text('Посетитель 2'), findsOneWidget);
     expect(tester.takeException(), isNull);
 
-    await tester.tap(find.byTooltip('Удалить из белого списка'));
+    await tester.tap(find.byTooltip('Удалить навсегда'));
     await tester.pumpAndSettle();
 
-    expect(
-        find.text('Удалить из белого списка').evaluate().length, greaterThan(0));
+    expect(find.text('Удалить навсегда'), findsWidgets);
     await tester.tap(find.text('Удалить'));
     await tester.pumpAndSettle();
 
@@ -242,12 +257,19 @@ class _FakeRepository implements OperatorRepository, AdminRepository {
   final List<String> confirmedIds = [];
   bool _confirmed = false;
   final List<String> removedVisitorIds = [];
+  final List<String> excludedVisitorIds = [];
   bool _visitor2Removed = false;
 
   @override
   Future<void> confirmVisitor(String id) async {
     confirmedIds.add(id);
     _confirmed = true;
+  }
+
+  @override
+  Future<void> excludeVisitor(String id) async {
+    excludedVisitorIds.add(id);
+    if (id == 'visitor-1') _confirmed = false;
   }
 
   @override

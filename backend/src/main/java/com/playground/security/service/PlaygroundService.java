@@ -119,6 +119,15 @@ public class PlaygroundService {
         person.confirm();
     }
 
+    /** Исключение из белого списка: возврат в статус на рассмотрении. */
+    @Transactional
+    public void revokePerson(String id) {
+        Person person = personRepository.findById(id)
+                .orElseThrow(() -> new ApiException(
+                        HttpStatus.NOT_FOUND, "PERSON_NOT_FOUND", "Person was not found."));
+        person.revoke();
+    }
+
     /** Полное удаление посетителя: сначала инциденты (FK), затем сама запись. */
     @Transactional
     public void deletePerson(String id) {

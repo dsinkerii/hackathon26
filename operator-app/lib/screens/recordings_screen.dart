@@ -439,7 +439,6 @@ class _RecordingEditorState extends State<_RecordingEditor> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _title;
   late final TextEditingController _eventType;
-  late final TextEditingController _duration;
   late final TextEditingController _videoUrl;
   late String _cameraId;
   late DateTime _recordedAt;
@@ -452,9 +451,6 @@ class _RecordingEditorState extends State<_RecordingEditor> {
     _recordedAt = recording?.recordedAt.toLocal() ?? DateTime.now();
     _title = TextEditingController(text: recording?.title ?? '');
     _eventType = TextEditingController(text: recording?.eventType ?? '');
-    _duration = TextEditingController(
-      text: recording?.durationSeconds?.toString() ?? '',
-    );
     _videoUrl = TextEditingController(text: recording?.videoUrl ?? '');
   }
 
@@ -462,7 +458,6 @@ class _RecordingEditorState extends State<_RecordingEditor> {
   void dispose() {
     _title.dispose();
     _eventType.dispose();
-    _duration.dispose();
     _videoUrl.dispose();
     super.dispose();
   }
@@ -545,19 +540,6 @@ class _RecordingEditorState extends State<_RecordingEditor> {
                     ),
                   ),
                   TextFormField(
-                    controller: _duration,
-                    decoration: const InputDecoration(
-                        labelText: 'Длительность, секунд'),
-                    keyboardType: TextInputType.number,
-                    validator: (value) {
-                      if (value == null || value.trim().isEmpty) return null;
-                      final seconds = int.tryParse(value);
-                      return seconds == null || seconds < 1
-                          ? 'Укажите положительное целое число'
-                          : null;
-                    },
-                  ),
-                  TextFormField(
                     controller: _videoUrl,
                     decoration: const InputDecoration(
                       labelText: 'Ссылка на видео',
@@ -594,9 +576,9 @@ class _RecordingEditorState extends State<_RecordingEditor> {
                       ? null
                       : _eventType.text.trim(),
                   recordedAt: _recordedAt,
-                  durationSeconds: _duration.text.trim().isEmpty
-                      ? null
-                      : int.parse(_duration.text.trim()),
+                  // Длительность не спрашиваем: при изменении существующей
+                  // записи она сохраняется, новая запись хранится без неё.
+                  durationSeconds: widget.recording?.durationSeconds,
                   videoUrl: _videoUrl.text.trim(),
                 ),
               );

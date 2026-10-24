@@ -78,6 +78,12 @@ class ApiOperatorRepository implements OperatorRepository, AdminRepository {
       );
 
   @override
+  Future<void> excludeVisitor(String id) => _expectSuccess(
+        _request('POST', '/api/v1/persons/${Uri.encodeComponent(id)}/revoke'),
+        'Не удалось исключить посетителя из белого списка',
+      );
+
+  @override
   Future<List<Visitor>> fetchWhitelist() async {
     final json = await _getJson(
       '/api/v1/persons',

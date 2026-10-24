@@ -18,7 +18,7 @@ class WhitelistScreen extends StatefulWidget {
 
 class _WhitelistScreenState extends State<WhitelistScreen> {
   late Future<List<Visitor>> _whitelist;
-  final Set<String> _removing = {};
+  final Set<String> _busy = {};
 
   @override
   void initState() {
@@ -32,21 +32,44 @@ class _WhitelistScreenState extends State<WhitelistScreen> {
     });
   }
 
-  Future<void> _remove(Visitor visitor) async {
+  /// Исключение из белого списка: посетитель остаётся в системе и
+  /// возвращается в статус «на рассмотрении» (в разделе «Посетители»).
+  Future<void> _exclude(Visitor visitor) async {
+    setState(() => _busy.add(visitor.id));
+    try {
+      await widget.repository.excludeVisitor(visitor.id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('Посетитель исключён из белого списка')),
+      );
+      _refresh();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content: Text('Не удалось исключить посетителя: $error')),
+      );
+    } finally {
+      if (mounted) setState(() => _busy.remove(visitor.id));
+    }
+  }
+
+  /// Полное удаление посетителя вместе с фото и связанными событиями.
+  Future<void> _delete(Visitor visitor) async {
     final displayName = visitor.displayName ?? 'Посетитель ${visitor.id}';
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (_) => _RemoveWhitelistDialog(displayName: displayName),
+      builder: (_) => _DeleteWhitelistDialog(displayName: displayName),
     );
     if (confirmed != true) return;
 
-    setState(() => _removing.add(visitor.id));
+    setState(() => _busy.add(visitor.id));
     try {
       await widget.repository.removeVisitor(visitor.id);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('Посетитель удалён из белого списка')),
+        const SnackBar(content: Text('Посетитель удалён')),
       );
       _refresh();
     } catch (error) {
@@ -55,7 +78,7 @@ class _WhitelistScreenState extends State<WhitelistScreen> {
         SnackBar(content: Text('Не удалось удалить посетителя: $error')),
       );
     } finally {
-      if (mounted) setState(() => _removing.remove(visitor.id));
+      if (mounted) setState(() => _busy.remove(visitor.id));
     }
   }
 
@@ -106,8 +129,9 @@ class _WhitelistScreenState extends State<WhitelistScreen> {
                     .map(
                       (visitor) => _WhitelistCard(
                         visitor: visitor,
-                        isRemoving: _removing.contains(visitor.id),
-                        onRemove: () => _remove(visitor),
+                        isBusy: _busy.contains(visitor.id),
+                        onExclude: () => _exclude(visitor),
+                        onDelete: () => _delete(visitor),
                       ),
                     )
                     .toList(),
@@ -123,13 +147,15 @@ class _WhitelistScreenState extends State<WhitelistScreen> {
 class _WhitelistCard extends StatelessWidget {
   const _WhitelistCard({
     required this.visitor,
-    required this.isRemoving,
-    required this.onRemove,
+    required this.isBusy,
+    required this.onExclude,
+    required this.onDelete,
   });
 
   final Visitor visitor;
-  final bool isRemoving;
-  final VoidCallback onRemove;
+  final bool isBusy;
+  final VoidCallback onExclude;
+  final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -157,16 +183,27 @@ class _WhitelistCard extends StatelessWidget {
                 '${seenDate.month.toString().padLeft(2, '0')}.'
                 '${seenDate.year}',
               ),
-              trailing: IconButton(
-                tooltip: 'Удалить из белого списка',
-                icon: isRemoving
-                    ? const SizedBox.square(
-                        dimension: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.person_remove_outlined),
-                color: const Color(0xFFFF3B30),
-                onPressed: isRemoving ? null : onRemove,
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    tooltip: 'Исключить из белого списка',
+                    icon: const Icon(Icons.person_remove_outlined),
+                    color: const Color(0xFF6E6E73),
+                    onPressed: isBusy ? null : onExclude,
+                  ),
+                  IconButton(
+                    tooltip: 'Удалить навсегда',
+                    icon: isBusy
+                        ? const SizedBox.square(
+                            dimension: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.delete_forever_outlined),
+                    color: const Color(0xFFFF3B30),
+                    onPressed: isBusy ? null : onDelete,
+                  ),
+                ],
               ),
             ),
           ],
@@ -211,20 +248,20 @@ class _VisitorPhoto extends StatelessWidget {
   }
 }
 
-class _RemoveWhitelistDialog extends StatelessWidget {
-  const _RemoveWhitelistDialog({required this.displayName});
+class _DeleteWhitelistDialog extends StatelessWidget {
+  const _DeleteWhitelistDialog({required this.displayName});
 
   final String displayName;
 
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Удалить из белого списка'),
+      title: const Text('Удалить навсегда'),
       content: SizedBox(
         width: adaptiveWidth(context, 380),
         child: Text(
-          'Посетитель «$displayName» будет удалён из белого списка вместе с '
-          'его фото и связанными событиями. Продолжить?',
+          'Посетитель «$displayName» будет удалён вместе с его фото и '
+          'связанными событиями. Действие необратимо. Продолжить?',
         ),
       ),
       actions: [

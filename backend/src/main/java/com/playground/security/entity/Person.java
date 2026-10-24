@@ -63,4 +63,9 @@ public class Person {
     public void confirm() {
         status = PersonStatus.TRUSTED;
     }
+
+    /** Исключение из белого списка: возврат в статус на рассмотрении. */
+    public void revoke() {
+        status = PersonStatus.PENDING;
+    }
 }
