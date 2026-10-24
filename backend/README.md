@@ -1,6 +1,9 @@
 # Safe Playground Backend
 
-Spring Boot REST backend for the Flutter operator app. Requires Java 17.
+Spring Boot 3.5.6 backend (Java 21) for the Flutter operator app: каркас
+`ru.playground` (миграции по vendor: `db/migration/h2|postgresql`) плюс
+перенесённые MVP-слои `com.playground.security` (ingest, SSE-алерты, журнал,
+демо-сидер; их схема добавляется миграцией `db/migration/legacy/V2__mvp_persons.sql`).
 
 ## Local run
 
@@ -11,7 +14,7 @@ $env:INGEST_API_TOKEN = "replace-with-a-local-secret"
 mvn spring-boot:run
 ```
 
-If Java 17 and Maven are not installed locally, run Maven in a container from
+If Java 21 and Maven are not installed locally, run Maven in a container from
 this directory instead:
 
 ```powershell
@@ -19,12 +22,18 @@ $env:INGEST_API_TOKEN = "replace-with-a-local-secret"
 docker run --rm -p 8080:8080 `
   -e "INGEST_API_TOKEN=$env:INGEST_API_TOKEN" `
   -v "${PWD}:/workspace" -w /workspace `
-  maven:3.9-eclipse-temurin-17 mvn spring-boot:run
+  maven:3.9-eclipse-temurin-21 mvn spring-boot:run
 ```
 
-The default profile uses a local H2 file database at `./data/playground` and
-stores images under `./data/media`. Flyway creates the schema on first startup.
-The API listens on `http://localhost:8080`.
+To run the tests:
+
+```powershell
+mvn test
+```
+
+The default profile is `h2` (file database at `./data/playground`, images under
+`./data/media`). The H2 console is enabled at `/h2-console` in this profile.
+Startup applies vendor migrations (H2/PostgreSQL) plus the legacy MVP schema.
 
 Additional environment variables:
 - `DEMO_MODE=true` enables `POST /api/v1/demo/reset` (seeded demo dataset),

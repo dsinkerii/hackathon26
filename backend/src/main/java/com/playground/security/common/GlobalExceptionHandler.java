@@ -9,6 +9,8 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -33,6 +35,23 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiError> handleUnreadableBody() {
         return ResponseEntity.badRequest()
                 .body(new ApiError("INVALID_REQUEST", "Request body is invalid."));
+    }
+
+    /** Missing /favicon.ico and similar — a regular 404, not a server incident. */
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<ApiError> handleNoResource(NoResourceFoundException exception) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(new ApiError("NOT_FOUND", "No resource: " + exception.getResourcePath()));
+    }
+
+    /**
+     * The SSE client hung up mid-write (e.g. closed the tab). Spring reports it
+     * through the async dispatch; nothing to answer to a dead connection.
+     */
+    @ExceptionHandler(AsyncRequestNotUsableException.class)
+    public ResponseEntity<ApiError> handleClientDisconnected(AsyncRequestNotUsableException exception) {
+        log.debug("Client disconnected while writing a response: {}", exception.getMessage());
+        return ResponseEntity.noContent().build();
     }
 
     @ExceptionHandler(Exception.class)
