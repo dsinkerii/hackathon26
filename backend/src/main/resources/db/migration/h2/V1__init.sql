@@ -39,7 +39,7 @@ CREATE TABLE incident (
 
 CREATE TABLE app_settings (
     "key"      VARCHAR(100) PRIMARY KEY,
-    value      CLOB         NOT NULL,
+    "value"    CLOB         NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
