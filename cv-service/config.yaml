@@ -1,0 +1,31 @@
+# Safe Playground CV service configuration.
+#
+# environment overrides (win higher priority than this file):
+#   PLAYGROUND_API_URL  — backend base URL
+#   INGEST_API_TOKEN    — ingest token shared with the backend
+
+backend:
+  # Where events are pushed to (POST /api/v1/incidents).
+  url: http://localhost:8080
+  # Leave empty here; the token goes through INGEST_API_TOKEN in production.
+
+source:
+  # simulator  — synthesizes events without any ML libraries (works anywhere)
+  # video      — real pipeline over a file, requires ultralytics + opencv
+  # camera     — real pipeline over /dev/videoN or webcam index
+  mode: simulator
+  video_path: ../data/videos/test.mp4
+  camera_index: 0
+
+events:
+  # simulator: average pause between synthetic events, seconds.
+  interval_seconds: 14
+  # pipeline: for one tracked object the same alarm type is not
+  # repeated earlier than this delay (server deduplicates for 30 s as well).
+  cooldown_seconds: 60
+  detection_confidence: 0.5
+
+# Restrictive zone as a polygon with normalized coordinates 0..1;
+# an object counts as "in the area" when its box center is inside.
+zone:
+  polygon: [[0.05, 0.55], [0.95, 0.55], [0.95, 0.95], [0.05, 0.95]]
