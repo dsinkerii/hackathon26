@@ -8,6 +8,7 @@ import 'package:safe_playground_operator/models/video_recording.dart';
 import 'package:safe_playground_operator/models/visitor.dart';
 import 'package:safe_playground_operator/services/admin_repository.dart';
 import 'package:safe_playground_operator/services/operator_repository.dart';
+import 'package:safe_playground_operator/widgets/mac_switch.dart';
 
 void main() {
   testWidgets('desktop opens in a macOS-style app window', (tester) async {
@@ -250,6 +251,70 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Профиль'), findsNothing);
     expect(tester.takeException(), isNull);
+
+    // Переключатель включения (macOS-стиль): выключенный аккаунт
+    // operator2 включается тапом по тумблеру в списке.
+    final toggles = find.byType(MacSwitch);
+    expect(toggles, findsNWidgets(2));
+
+    // operator2 был включён из диалога — гасим тумблером в списке…
+    final operatorSwitch = find.descendant(
+      of: find.ancestor(
+        of: find.text('operator2'),
+        matching: find.byType(ListTile),
+      ),
+      matching: find.byType(MacSwitch),
+    );
+    expect(operatorSwitch, findsOneWidget);
+    expect(tester.widget<MacSwitch>(operatorSwitch).value, isTrue);
+    await tester.tap(operatorSwitch);
+    await tester.pumpAndSettle();
+    expect(find.text('Оператор · отключена'), findsOneWidget);
+    // …и включаем обратно тумблером.
+    await tester.tap(operatorSwitch);
+    await tester.pumpAndSettle();
+    expect(find.text('Оператор · активна'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('narrow window falls back to the compact bottom bar',
+      (tester) async {
+    // 490px: NavigationBar не помещается (по ~90px на вкладку нужно 630px),
+    // должен использоваться компактный бар из иконок.
+    tester.view.physicalSize = const Size(490, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(SafePlaygroundApp(repository: _FakeRepository()));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(NavigationBar), findsNothing);
+    expect(find.byTooltip('Мониторинг'), findsOneWidget);
+    expect(find.byTooltip('Белый список'), findsOneWidget);
+    expect(find.byTooltip('Посетители'), findsOneWidget);
+
+    // Переход по компактному бару работает.
+    await tester.tap(find.byTooltip('Посетители'));
+    await tester.pumpAndSettle();
+    expect(find.byType(NavigationBar), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('bottom bar shows labels when the window is wide enough',
+      (tester) async {
+    // 640px: NavigationBar влезает (7 вкладок по 90px = 630px),
+    // но подписи ещё скрыты (порог 102px на вкладку).
+    tester.view.physicalSize = const Size(640, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(SafePlaygroundApp(repository: _FakeRepository()));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(NavigationBar), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 }
 
@@ -433,22 +498,27 @@ class _FakeRepository implements OperatorRepository, AdminRepository {
   @override
   Future<void> deleteRecording(String id) async {}
 
+  // Изменяемый статус аккаунтов: setAccountEnabled меняет его,
+  // fetchAccounts отдаёт актуальные значения (как настоящий backend).
+  final Map<String, ({String username, String role})> _accounts = {
+    'account-admin': (username: 'admin', role: 'ADMIN'),
+    'account-operator': (username: 'operator2', role: 'OPERATOR'),
+  };
+  final Map<String, bool> _accountEnabled = {
+    'account-admin': true,
+    'account-operator': false,
+  };
+
   @override
   Future<List<AdminAccount>> fetchAccounts() async => [
-        AdminAccount(
-          id: 'account-admin',
-          username: 'admin',
-          role: 'ADMIN',
-          enabled: true,
-          createdAt: DateTime.utc(2026, 1, 1),
-        ),
-        AdminAccount(
-          id: 'account-operator',
-          username: 'operator2',
-          role: 'OPERATOR',
-          enabled: false,
-          createdAt: DateTime.utc(2026, 1, 2),
-        ),
+        for (final entry in _accounts.entries)
+          AdminAccount(
+            id: entry.key,
+            username: entry.value.username,
+            role: entry.value.role,
+            enabled: _accountEnabled[entry.key] ?? false,
+            createdAt: DateTime.utc(2026, 1, 1),
+          ),
       ];
 
   @override
@@ -475,12 +545,25 @@ class _FakeRepository implements OperatorRepository, AdminRepository {
       );
 
   @override
-  Future<AdminAccount> setAccountEnabled(String id, bool enabled) async =>
-      AdminAccount(
+  Future<AdminAccount> setAccountEnabled(String id, bool enabled) async {
+    await Future<void>.value();
+    if (_accounts.containsKey(id)) {
+      _accountEnabled[id] = enabled;
+      final info = _accounts[id]!;
+      return AdminAccount(
         id: id,
-        username: id == 'account-admin' ? 'admin' : 'operator2',
-        role: id == 'account-admin' ? 'ADMIN' : 'OPERATOR',
+        username: info.username,
+        role: info.role,
         enabled: enabled,
-        createdAt: DateTime.utc(2026),
+        createdAt: DateTime.utc(2026, 1, 1),
       );
+    }
+    return AdminAccount(
+      id: id,
+      username: 'user',
+      role: 'OPERATOR',
+      enabled: enabled,
+      createdAt: DateTime.utc(2026),
+    );
+  }
 }

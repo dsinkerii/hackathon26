@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/admin_account.dart';
+import '../widgets/mac_switch.dart';
 import '../services/admin_repository.dart';
 import '../widgets/account_profile_details.dart';
 import '../widgets/adaptivity.dart';
@@ -187,7 +188,7 @@ class _AccountTile extends StatelessWidget {
         '${account.role == 'ADMIN' ? 'Администратор' : 'Оператор'} · '
         '${account.enabled ? 'активна' : 'отключена'}',
       ),
-      trailing: Switch(
+      trailing: MacSwitch(
         value: account.enabled,
         onChanged: isCurrent && account.enabled ? null : onEnabledChanged,
       ),

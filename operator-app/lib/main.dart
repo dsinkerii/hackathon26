@@ -357,10 +357,11 @@ class _OperatorShellState extends State<OperatorShell> {
     final width = MediaQuery.sizeOf(context).width;
     final showSessionPill = width >= 600;
     // Горизонтальные минимумы нижней навигации: подписи требуют ~102px
-    // на раздел, только иконки — 64px. На узких телефонах бар собирается
+    // на раздел, только иконки — 90px (индикатор 64px + внутренние
+    // отступы 12×2). На узких телефонах и в узких окнах бар собирается
     // из компактных иконных кнопок (см. _compactBottomBar).
     final showLabels = width >= destinations.length * 102;
-    final barFits = width >= destinations.length * 64;
+    final barFits = width >= destinations.length * 90;
 
     final bottomBar = NavigationBar(
       selectedIndex: _selectedIndex,
