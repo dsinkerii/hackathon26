@@ -410,6 +410,7 @@ class _LiveCameraPlayer extends StatefulWidget {
 
 class _LiveCameraPlayerState extends State<_LiveCameraPlayer> {
   String? _error;
+  late String _url;
 
   @override
   void initState() {
@@ -425,22 +426,41 @@ class _LiveCameraPlayerState extends State<_LiveCameraPlayer> {
     }
   }
 
+  /// `0.0.0.0` is a bind address, not a destination. Browsers allow it in the
+  /// address bar but refuse it for subresources such as the MJPEG `<img>`, so
+  /// normalise it to loopback instead of failing with a blank player.
+  String _normalise(String raw) {
+    final uri = Uri.tryParse(raw);
+    if (uri == null) return raw;
+    if (uri.host == '0.0.0.0' || uri.host == '[::]' || uri.host == '::') {
+      return uri.replace(host: '127.0.0.1').toString();
+    }
+    return raw;
+  }
+
   void _validate() {
     final raw = widget.streamUrl.trim();
     final uri = Uri.tryParse(raw);
     if (uri == null || !uri.hasScheme) {
-      setState(() => _error = 'Некорректный адрес потока: $raw');
+      setState(() {
+        _url = raw;
+        _error = 'Некорректный адрес потока: $raw';
+      });
       return;
     }
     if (kIsWeb && (uri.scheme == 'rtsp' || uri.scheme == 'rtsps')) {
       setState(() {
+        _url = raw;
         _error = 'Браузер не умеет воспроизводить RTSP. '
             'Укажите MJPEG-адрес камеры, например '
             'http://127.0.0.1:8090/stream.mjpg';
       });
       return;
     }
-    setState(() => _error = null);
+    setState(() {
+      _url = _normalise(raw);
+      _error = null;
+    });
   }
 
   void _retry() {
@@ -460,8 +480,8 @@ class _LiveCameraPlayerState extends State<_LiveCameraPlayer> {
     }
 
     return CameraView(
-      key: ValueKey(widget.streamUrl),
-      url: widget.streamUrl,
+      key: ValueKey(_url),
+      url: _url,
       fit: BoxFit.cover,
       onError: (message) {
         if (!mounted) return;
