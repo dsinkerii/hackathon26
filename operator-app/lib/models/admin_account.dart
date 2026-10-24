@@ -5,6 +5,7 @@ class AdminAccount {
     required this.role,
     required this.enabled,
     required this.createdAt,
+    this.primary = false,
   });
 
   final String id;
@@ -12,6 +13,9 @@ class AdminAccount {
   final String role;
   final bool enabled;
   final DateTime createdAt;
+
+  /// Главная (bootstrap) учётная запись — не удаляемая и всегда включаемая.
+  final bool primary;
 
   factory AdminAccount.fromJson(Map<String, dynamic> json) {
     final id = json['id'];
@@ -30,6 +34,7 @@ class AdminAccount {
       role: role,
       enabled: json['enabled'] == true,
       createdAt: DateTime.parse(createdAt),
+      primary: json['primary'] == true,
     );
   }
 }

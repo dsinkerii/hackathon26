@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../theme/app_theme.dart';
+
 /// Переключатель в стиле macOS System Settings: капсула-трек, белый бегунок.
 ///
 /// Нарисован собственными контейнерами вместо Material `Switch`, у которого
@@ -14,8 +16,6 @@ class MacSwitch extends StatelessWidget {
   final bool value;
   final ValueChanged<bool>? onChanged;
 
-  static const _onColor = Color(0xFF007AFF);
-  static const _offColor = Color(0xFFD2D2D7);
   static const double _trackWidth = 44;
   static const double _trackHeight = 26;
 
@@ -23,9 +23,10 @@ class MacSwitch extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final onColor = Theme.of(context).colorScheme.primary;
     final trackColor = !_enabled
-        ? (value ? const Color(0xFFC4DCF5) : const Color(0xFFE5E5EA))
-        : (value ? _onColor : _offColor);
+        ? (value ? accentSoftOf(onColor) : const Color(0xFFE5E5EA))
+        : (value ? onColor : const Color(0xFFD2D2D7));
 
     return Semantics(
       toggled: value,

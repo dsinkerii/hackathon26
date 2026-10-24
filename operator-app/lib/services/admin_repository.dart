@@ -52,4 +52,7 @@ abstract interface class AdminRepository {
     required String role,
   });
   Future<AdminAccount> setAccountEnabled(String id, bool enabled);
+
+  /// Безвозвратное удаление учётной записи (кроме основной и своей).
+  Future<void> deleteAccount(String id);
 }

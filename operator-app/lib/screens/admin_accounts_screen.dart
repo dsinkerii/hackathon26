@@ -66,6 +66,27 @@ class _AdminAccountsScreenState extends State<AdminAccountsScreen> {
     }
   }
 
+  /// Полное удаление учётной записи (кроме основной и собственной) —
+  /// после подтверждения диалогом.
+  Future<void> _deleteAccount(AdminAccount account) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => _DeleteAccountDialog(username: account.username),
+    );
+    if (confirmed != true) return;
+    try {
+      await widget.repository.deleteAccount(account.id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Учётная запись удалена')),
+      );
+      _reload();
+    } catch (error) {
+      if (!mounted) return;
+      _showError(error);
+    }
+  }
+
   Future<void> _openAccountProfile(AdminAccount account) async {
     await showDialog<void>(
       context: context,
@@ -145,6 +166,7 @@ class _AdminAccountsScreenState extends State<AdminAccountsScreen> {
                       onOpenProfile: () => _openAccountProfile(account),
                       onEnabledChanged: (enabled) =>
                           _setEnabled(account, enabled),
+                      onDelete: () => _deleteAccount(account),
                     ),
                 ],
               ),
@@ -167,12 +189,14 @@ class _AccountTile extends StatelessWidget {
     required this.isCurrent,
     required this.onOpenProfile,
     required this.onEnabledChanged,
+    required this.onDelete,
   });
 
   final AdminAccount account;
   final bool isCurrent;
   final VoidCallback onOpenProfile;
   final ValueChanged<bool> onEnabledChanged;
+  final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -185,13 +209,61 @@ class _AccountTile extends StatelessWidget {
       ),
       title: Text('${account.username}${isCurrent ? ' (вы)' : ''}'),
       subtitle: Text(
-        '${account.role == 'ADMIN' ? 'Администратор' : 'Оператор'} · '
+        '${account.role == 'ADMIN' ? 'Администратор' : 'Оператор'}'
+        '${account.primary ? ' · главная' : ''} · '
         '${account.enabled ? 'активна' : 'отключена'}',
       ),
-      trailing: MacSwitch(
-        value: account.enabled,
-        onChanged: isCurrent && account.enabled ? null : onEnabledChanged,
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (!account.primary && !isCurrent)
+            IconButton(
+              tooltip: 'Удалить пользователя',
+              onPressed: onDelete,
+              icon: const Icon(Icons.person_remove_outlined),
+              color: const Color(0xFFFF3B30),
+            ),
+          MacSwitch(
+            value: account.enabled,
+            onChanged: isCurrent && account.enabled ? null : onEnabledChanged,
+          ),
+        ],
       ),
+    );
+  }
+}
+
+/// Диалог подтверждения удаления учётной записи.
+class _DeleteAccountDialog extends StatelessWidget {
+  const _DeleteAccountDialog({required this.username});
+
+  final String username;
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Удалить учётную запись?'),
+      content: SizedBox(
+        width: adaptiveWidth(context, 380),
+        child: Text(
+          'У пользователя «$username» будет отозван доступ, учётная запись '
+          'и её пароль будут удалены вместе с ней. Действие необратимо. '
+          'Продолжить?',
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text('Отмена'),
+        ),
+        TextButton(
+          style: TextButton.styleFrom(
+            foregroundColor: const Color(0xFFFF3B30),
+          ),
+          onPressed: () => Navigator.of(context).pop(true),
+          child: const Text('Удалить'),
+        ),
+      ],
     );
   }
 }

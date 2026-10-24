@@ -1,6 +1,7 @@
 package com.playground.security.auth;
 
 import com.playground.security.common.ApiException;
+import com.playground.security.config.AppProperties;
 import com.playground.security.entity.AdminUser;
 import com.playground.security.repository.AdminUserRepository;
 import jakarta.validation.Valid;
@@ -35,14 +36,17 @@ public class AuthController {
     private final AuthenticationManager authenticationManager;
     private final JwtEncoder jwtEncoder;
     private final AdminUserRepository users;
+    private final AppProperties properties;
 
     public AuthController(
             AuthenticationManager authenticationManager,
             JwtEncoder jwtEncoder,
-            AdminUserRepository users) {
+            AdminUserRepository users,
+            AppProperties properties) {
         this.authenticationManager = authenticationManager;
         this.jwtEncoder = jwtEncoder;
         this.users = users;
+        this.properties = properties;
     }
 
     @PostMapping("/login")
@@ -82,7 +86,8 @@ public class AuthController {
         AdminUser user = users.findById(principal.getSubject())
                 .orElseThrow(() -> new ApiException(
                         HttpStatus.UNAUTHORIZED, "ACCOUNT_NOT_FOUND", "Account not found."));
-        return AdminUserController.UserResponse.from(user);
+        return AdminUserController.UserResponse.from(
+                user, AdminUserController.isPrimary(user, properties));
     }
 
     public record LoginRequest(

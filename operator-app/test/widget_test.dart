@@ -8,9 +8,13 @@ import 'package:safe_playground_operator/models/video_recording.dart';
 import 'package:safe_playground_operator/models/visitor.dart';
 import 'package:safe_playground_operator/services/admin_repository.dart';
 import 'package:safe_playground_operator/services/operator_repository.dart';
+import 'package:safe_playground_operator/theme/app_theme.dart';
 import 'package:safe_playground_operator/widgets/mac_switch.dart';
 
 void main() {
+  // Статическое состояние темы не должно перетекать между тестами.
+  setUp(() => ThemeController.active.value = AppThemes.blue);
+
   testWidgets('desktop opens in a macOS-style app window', (tester) async {
     tester.view.physicalSize = const Size(1280, 900);
     tester.view.devicePixelRatio = 1;
@@ -277,6 +281,53 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('access list allows deleting non-primary accounts',
+      (tester) async {
+    final repository = _FakeRepository();
+    await tester.pumpWidget(SafePlaygroundApp(repository: repository));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Доступ'));
+    await tester.pumpAndSettle();
+
+    // У главного админа кнопки удаления нет, у оператора — есть.
+    expect(find.text('Администратор · главная · активна'), findsOneWidget);
+    expect(find.byTooltip('Удалить пользователя'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Удалить пользователя'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Удалить учётную запись?'), findsOneWidget);
+    await tester.tap(find.text('Удалить'));
+    await tester.pumpAndSettle();
+
+    // Аккаунт удалён из списка и из фейкового репозитория.
+    expect(repository.deletedAccountIds, ['account-operator']);
+    expect(find.text('operator2'), findsNothing);
+    expect(find.text('admin'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('color theme can be switched from the profile dialog',
+      (tester) async {
+    await tester.pumpWidget(SafePlaygroundApp(repository: _FakeRepository()));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Профиль'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Цветовая тема'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Бирюзовая'));
+    await tester.pumpAndSettle();
+
+    final materialApp = tester.widget<MaterialApp>(find.byType(MaterialApp));
+    expect(
+      materialApp.theme?.colorScheme.primary,
+      const Color(0xFF30B0C7),
+    );
+  });
+
   testWidgets('narrow window falls back to the compact bottom bar',
       (tester) async {
     // 490px: NavigationBar не помещается (по ~90px на вкладку нужно 630px),
@@ -500,9 +551,11 @@ class _FakeRepository implements OperatorRepository, AdminRepository {
 
   // Изменяемый статус аккаунтов: setAccountEnabled меняет его,
   // fetchAccounts отдаёт актуальные значения (как настоящий backend).
-  final Map<String, ({String username, String role})> _accounts = {
-    'account-admin': (username: 'admin', role: 'ADMIN'),
-    'account-operator': (username: 'operator2', role: 'OPERATOR'),
+  final List<String> deletedAccountIds = [];
+  final Map<String, ({String username, String role, bool primary})> _accounts = {
+    'account-admin': (username: 'admin', role: 'ADMIN', primary: true),
+    'account-operator':
+        (username: 'operator2', role: 'OPERATOR', primary: false),
   };
   final Map<String, bool> _accountEnabled = {
     'account-admin': true,
@@ -518,6 +571,7 @@ class _FakeRepository implements OperatorRepository, AdminRepository {
             role: entry.value.role,
             enabled: _accountEnabled[entry.key] ?? false,
             createdAt: DateTime.utc(2026, 1, 1),
+            primary: entry.value.primary,
           ),
       ];
 
@@ -528,6 +582,7 @@ class _FakeRepository implements OperatorRepository, AdminRepository {
         role: 'ADMIN',
         enabled: true,
         createdAt: DateTime.utc(2026, 1, 1),
+        primary: true,
       );
 
   @override
@@ -545,6 +600,13 @@ class _FakeRepository implements OperatorRepository, AdminRepository {
       );
 
   @override
+  Future<void> deleteAccount(String id) async {
+    deletedAccountIds.add(id);
+    _accounts.remove(id);
+    _accountEnabled.remove(id);
+  }
+
+  @override
   Future<AdminAccount> setAccountEnabled(String id, bool enabled) async {
     await Future<void>.value();
     if (_accounts.containsKey(id)) {
@@ -556,6 +618,7 @@ class _FakeRepository implements OperatorRepository, AdminRepository {
         role: info.role,
         enabled: enabled,
         createdAt: DateTime.utc(2026, 1, 1),
+        primary: info.primary,
       );
     }
     return AdminAccount(

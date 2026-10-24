@@ -75,11 +75,15 @@ class _LoginScreenState extends State<LoginScreen> {
                     final compact = constraints.maxWidth < 640;
                     final intro = Container(
                       padding: const EdgeInsets.all(36),
-                      decoration: const BoxDecoration(
+                      decoration: BoxDecoration(
                         gradient: LinearGradient(
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
-                          colors: [Color(0xFF007AFF), Color(0xFF0055D4)],
+                          colors: [
+                            Theme.of(context).colorScheme.primary,
+                            Color.lerp(Theme.of(context).colorScheme.primary,
+                                    const Color(0xFF001040), 0.35)!
+                          ],
                         ),
                       ),
                       child: const Column(

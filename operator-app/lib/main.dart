@@ -15,6 +15,7 @@ import 'services/admin_repository.dart';
 import 'services/auth_service.dart';
 import 'services/api_operator_repository.dart';
 import 'services/operator_repository.dart';
+import 'theme/app_theme.dart';
 import 'widgets/account_profile_details.dart';
 import 'widgets/adaptivity.dart';
 
@@ -22,140 +23,39 @@ void main() {
   runApp(const SafePlaygroundApp());
 }
 
-class SafePlaygroundApp extends StatelessWidget {
+class SafePlaygroundApp extends StatefulWidget {
   const SafePlaygroundApp({super.key, this.repository});
 
   final OperatorRepository? repository;
 
   @override
-  Widget build(BuildContext context) {
-    const accent = Color(0xFF007AFF);
-    final operatorRepository =
-        repository ?? ApiOperatorRepository.fromEnvironment();
+  State<SafePlaygroundApp> createState() => _SafePlaygroundAppState();
+}
 
-    return MaterialApp(
-      title: 'PlayGuard AI',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        useMaterial3: true,
-        colorScheme: const ColorScheme.light(
-          primary: accent,
-          onPrimary: Colors.white,
-          secondary: Color(0xFF5856D6),
-          onSecondary: Colors.white,
-          error: Color(0xFFFF3B30),
-          onError: Colors.white,
-          surface: Colors.white,
-          onSurface: Color(0xFF1D1D1F),
-          onSurfaceVariant: Color(0xFF6E6E73),
-          outline: Color(0xFFD2D2D7),
-          outlineVariant: Color(0xFFE5E5EA),
-          surfaceContainerHighest: Color(0xFFF5F5F7),
-        ),
-        scaffoldBackgroundColor: const Color(0xFFF5F5F7),
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Color(0xFFF5F5F7),
-          foregroundColor: Color(0xFF1D1D1F),
-          elevation: 0,
-          scrolledUnderElevation: 0,
-          centerTitle: false,
-          toolbarHeight: 68,
-        ),
-        cardTheme: CardThemeData(
-          color: Colors.white,
-          elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-            side: const BorderSide(color: Color(0xFFE5E5EA)),
-          ),
-        ),
-        inputDecorationTheme: InputDecorationTheme(
-          filled: true,
-          fillColor: const Color(0xFFF5F5F7),
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide.none,
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: Color(0xFFE5E5EA)),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: accent, width: 1.5),
-          ),
-          errorBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: Color(0xFFFF3B30)),
-          ),
-          focusedErrorBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: Color(0xFFFF3B30), width: 1.5),
-          ),
-        ),
-        filledButtonTheme: FilledButtonThemeData(
-          style: FilledButton.styleFrom(
-            minimumSize: const Size(44, 44),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-        ),
-        outlinedButtonTheme: OutlinedButtonThemeData(
-          style: OutlinedButton.styleFrom(
-            minimumSize: const Size(44, 44),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            side: const BorderSide(color: Color(0xFFD2D2D7)),
-          ),
-        ),
-        navigationRailTheme: const NavigationRailThemeData(
-          backgroundColor: Color(0xFFF5F5F7),
-          indicatorColor: Color(0xFFDDEBFF),
-          selectedIconTheme: IconThemeData(color: accent),
-          unselectedIconTheme: IconThemeData(color: Color(0xFF6E6E73)),
-          selectedLabelTextStyle: TextStyle(
-            color: accent,
-            fontWeight: FontWeight.w600,
-          ),
-          unselectedLabelTextStyle: TextStyle(color: Color(0xFF6E6E73)),
-          minExtendedWidth: 244,
-          useIndicator: true,
-        ),
-        navigationBarTheme: NavigationBarThemeData(
-          backgroundColor: Colors.white,
-          indicatorColor: const Color(0xFFDDEBFF),
-          elevation: 0,
-          height: 72,
-          labelTextStyle: WidgetStateProperty.resolveWith(
-            (states) => TextStyle(
-              fontSize: 12,
-              fontWeight: states.contains(WidgetState.selected)
-                  ? FontWeight.w600
-                  : FontWeight.w400,
-            ),
-          ),
-        ),
-        dialogTheme: DialogThemeData(
-          backgroundColor: Colors.white,
-          surfaceTintColor: Colors.transparent,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-        ),
-        snackBarTheme: SnackBarThemeData(
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
-      ),
-      home: repository == null
-          ? const AuthGate()
-          : OperatorShell(repository: operatorRepository),
+class _SafePlaygroundAppState extends State<SafePlaygroundApp> {
+  @override
+  void initState() {
+    super.initState();
+    ThemeController.load();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: ThemeController.active,
+      builder: (context, _) {
+        final operatorRepository =
+            widget.repository ?? ApiOperatorRepository.fromEnvironment();
+
+        return MaterialApp(
+          title: 'PlayGuard AI',
+          debugShowCheckedModeBanner: false,
+          theme: buildPlaygroundTheme(ThemeController.active.value),
+          home: widget.repository == null
+              ? const AuthGate()
+              : OperatorShell(repository: operatorRepository),
+        );
+      },
     );
   }
 }
@@ -375,24 +275,25 @@ class _OperatorShellState extends State<OperatorShell> {
         ? bottomBar
         : _compactBottomBar();
 
+    final scheme = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(
-        title: const Row(
+        title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             DecoratedBox(
               decoration: BoxDecoration(
-                color: Color(0xFFDDEBFF),
-                borderRadius: BorderRadius.all(Radius.circular(10)),
+                color: accentSoftOf(scheme.primary),
+                borderRadius: const BorderRadius.all(Radius.circular(10)),
               ),
               child: Padding(
-                padding: EdgeInsets.all(8),
+                padding: const EdgeInsets.all(8),
                 child: Icon(Icons.shield_outlined,
-                    color: Color(0xFF007AFF), size: 21),
+                    color: scheme.primary, size: 21),
               ),
             ),
-            SizedBox(width: 12),
-            Flexible(
+            const SizedBox(width: 12),
+            const Flexible(
               child: Text('PlayGuard AI',
                   maxLines: 1, overflow: TextOverflow.ellipsis),
             ),
@@ -416,12 +317,12 @@ class _OperatorShellState extends State<OperatorShell> {
                     children: [
                       CircleAvatar(
                         radius: 12,
-                        backgroundColor: const Color(0xFFDDEBFF),
+                        backgroundColor: accentSoftOf(scheme.primary),
                         child: Text(
                           widget.session!.username.characters.first
                               .toUpperCase(),
-                          style: const TextStyle(
-                            color: Color(0xFF007AFF),
+                          style: TextStyle(
+                            color: scheme.primary,
                             fontSize: 11,
                             fontWeight: FontWeight.w700,
                           ),
@@ -888,7 +789,8 @@ class _MacInspector extends StatelessWidget {
                   children: [
                     CircleAvatar(
                       radius: 19,
-                      backgroundColor: const Color(0xFF007AFF),
+                      backgroundColor:
+                          Theme.of(context).colorScheme.primary,
                       child: Text(
                         initial,
                         style: const TextStyle(
@@ -1069,7 +971,7 @@ class _ProfileDialogState extends State<_ProfileDialog> {
               children: [
                 CircleAvatar(
                   radius: 22,
-                  backgroundColor: const Color(0xFF007AFF),
+                  backgroundColor: Theme.of(context).colorScheme.primary,
                   child: Text(
                     displayName.characters.first.toUpperCase(),
                     style: const TextStyle(
@@ -1104,6 +1006,8 @@ class _ProfileDialogState extends State<_ProfileDialog> {
                 ),
               ],
             ),
+            const Divider(height: 24),
+            const _ThemeSwatches(),
             const Divider(height: 24),
             FutureBuilder<AdminAccount?>(
               future: _profile,
@@ -1265,4 +1169,72 @@ class _StartupError extends StatelessWidget {
           ),
         ),
       );
+}
+
+/// Выбор цветовой темы: кружки акцентов, текущая отмечена галочкой.
+class _ThemeSwatches extends StatelessWidget {
+  const _ThemeSwatches();
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: ThemeController.active,
+      builder: (context, _) {
+        final active = ThemeController.active.value;
+        final scheme = Theme.of(context).colorScheme;
+        return Row(
+          children: [
+            Icon(Icons.palette_outlined,
+                size: 18, color: scheme.onSurfaceVariant),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text('Цветовая тема',
+                  style: Theme.of(context).textTheme.bodyMedium),
+            ),
+            for (final theme in AppThemes.all)
+              Padding(
+                padding: const EdgeInsets.only(left: 6),
+                child: _ThemeDot(theme: theme, selected: theme == active),
+              ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _ThemeDot extends StatelessWidget {
+  const _ThemeDot({required this.theme, required this.selected});
+
+  final PlayTheme theme;
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: theme.label,
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: () => ThemeController.select(theme),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: theme.accent,
+            border: Border.all(
+              color: selected
+                  ? Theme.of(context).colorScheme.onSurface
+                  : Colors.transparent,
+              width: 3,
+            ),
+          ),
+          child: selected
+              ? const Icon(Icons.check, size: 14, color: Colors.white)
+              : null,
+        ),
+      ),
+    );
+  }
 }

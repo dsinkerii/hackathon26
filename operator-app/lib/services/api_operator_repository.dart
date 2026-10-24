@@ -261,6 +261,12 @@ class ApiOperatorRepository implements OperatorRepository, AdminRepository {
         body: {'enabled': enabled},
       ));
 
+  @override
+  Future<void> deleteAccount(String id) => _expectSuccess(
+        _request('DELETE', '/api/v1/users/${Uri.encodeComponent(id)}'),
+        'Не удалось удалить учётную запись',
+      );
+
   Future<Object?> _getJson(String path, {Map<String, String>? query}) async {
     final response = await _request('GET', path, query: query);
     if (response.statusCode < 200 || response.statusCode >= 300) {
