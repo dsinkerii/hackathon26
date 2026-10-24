@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_m3shapes/flutter_m3shapes.dart';
 import '../../models/incident_model.dart';
 import '../../state/app_state.dart';
 import '../widgets/incident_dialog.dart';
@@ -43,13 +44,14 @@ class _ActivityLogsScreenState extends State<ActivityLogsScreen> {
 
     return Column(
       children: [
-        // Harmonized Filter Chips Bar
+        // Harmonized Material You Filter Chips Bar
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           child: Row(
             children: [
               FilterChip(
+                showCheckmark: true,
                 label: const Text('Все'),
                 selected: _selectedTypeFilter == null && !_onlyUnprocessed,
                 onSelected: (_) {
@@ -61,6 +63,7 @@ class _ActivityLogsScreenState extends State<ActivityLogsScreen> {
               ),
               const SizedBox(width: 8),
               FilterChip(
+                showCheckmark: true,
                 label: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -69,7 +72,9 @@ class _ActivityLogsScreenState extends State<ActivityLogsScreen> {
                       const SizedBox(width: 6),
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 2),
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
                         decoration: BoxDecoration(
                           color: colorScheme.primary,
                           borderRadius: BorderRadius.circular(10),
@@ -95,6 +100,7 @@ class _ActivityLogsScreenState extends State<ActivityLogsScreen> {
               ),
               const SizedBox(width: 8),
               FilterChip(
+                showCheckmark: true,
                 label: const Text('Безопасность'),
                 selected: _selectedTypeFilter == IncidentType.carOnPlayground,
                 onSelected: (val) {
@@ -106,6 +112,7 @@ class _ActivityLogsScreenState extends State<ActivityLogsScreen> {
               ),
               const SizedBox(width: 8),
               FilterChip(
+                showCheckmark: true,
                 label: const Text('Незнакомцы'),
                 selected: _selectedTypeFilter == IncidentType.strangerDetected,
                 onSelected: (val) {
@@ -117,6 +124,7 @@ class _ActivityLogsScreenState extends State<ActivityLogsScreen> {
               ),
               const SizedBox(width: 8),
               FilterChip(
+                showCheckmark: true,
                 label: const Text('Доступ'),
                 selected: _selectedTypeFilter == IncidentType.doorOpened,
                 onSelected: (val) {
@@ -130,7 +138,7 @@ class _ActivityLogsScreenState extends State<ActivityLogsScreen> {
           ),
         ),
 
-        // Logs List with Grouping and Bottom System Padding
+        // Logs List with Grouping and Staggered Animations
         Expanded(
           child: RefreshIndicator(
             onRefresh: () => state.refreshAll(),
@@ -139,8 +147,11 @@ class _ActivityLogsScreenState extends State<ActivityLogsScreen> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.history_outlined,
-                            size: 48, color: colorScheme.onSurfaceVariant),
+                        Icon(
+                          Icons.history_outlined,
+                          size: 48,
+                          color: colorScheme.onSurfaceVariant,
+                        ),
                         const SizedBox(height: 12),
                         Text(
                           'Событий не найдено',
@@ -164,7 +175,13 @@ class _ActivityLogsScreenState extends State<ActivityLogsScreen> {
                           count: pending.length,
                           isWarning: true,
                         ),
-                        ...pending.map((i) => _buildIncidentTile(context, i)),
+                        ...pending.asMap().entries.map(
+                              (entry) => _buildIncidentTile(
+                                context,
+                                entry.value,
+                                entry.key,
+                              ),
+                            ),
                         const SizedBox(height: 16),
                       ],
                       if (processed.isNotEmpty) ...[
@@ -175,7 +192,13 @@ class _ActivityLogsScreenState extends State<ActivityLogsScreen> {
                             count: processed.length,
                             isWarning: false,
                           ),
-                        ...processed.map((i) => _buildIncidentTile(context, i)),
+                        ...processed.asMap().entries.map(
+                              (entry) => _buildIncidentTile(
+                                context,
+                                entry.value,
+                                entry.key,
+                              ),
+                            ),
                       ],
                     ],
                   ),
@@ -209,12 +232,12 @@ class _ActivityLogsScreenState extends State<ActivityLogsScreen> {
           ),
           const SizedBox(width: 8),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
             decoration: BoxDecoration(
               color: isWarning
                   ? colorScheme.primaryContainer
                   : colorScheme.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(12),
             ),
             child: Text(
               '$count',
@@ -232,124 +255,145 @@ class _ActivityLogsScreenState extends State<ActivityLogsScreen> {
     );
   }
 
-  Widget _buildIncidentTile(BuildContext context, Incident incident) {
+  Widget _buildIncidentTile(
+    BuildContext context,
+    Incident incident,
+    int index,
+  ) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
     IconData iconData;
     Color iconBg;
     Color iconFg;
+    Shapes m3Shape;
 
-    // Segmented into 3 tonal M3 categories
     switch (incident.type) {
       case IncidentType.carOnPlayground:
-        // Category 1: Urgent safety alerts
         iconData = Icons.warning_amber_rounded;
         iconBg = colorScheme.errorContainer;
         iconFg = colorScheme.onErrorContainer;
+        m3Shape = Shapes.gem;
         break;
       case IncidentType.strangerDetected:
-      case IncidentType.doorOpened:
-        // Category 2: Access & stranger detection
-        iconData = incident.type == IncidentType.strangerDetected
-            ? Icons.person_search_outlined
-            : Icons.door_sliding_outlined;
+        iconData = Icons.person_search_outlined;
         iconBg = colorScheme.secondaryContainer;
         iconFg = colorScheme.onSecondaryContainer;
+        m3Shape = Shapes.slanted;
+        break;
+      case IncidentType.doorOpened:
+        iconData = Icons.door_sliding_outlined;
+        iconBg = colorScheme.secondaryContainer;
+        iconFg = colorScheme.onSecondaryContainer;
+        m3Shape = Shapes.arch;
         break;
       case IncidentType.deliveryArrived:
-      case IncidentType.motionDetected:
-        // Category 3: General service & routine events
-        iconData = incident.type == IncidentType.deliveryArrived
-            ? Icons.local_shipping_outlined
-            : Icons.notifications_none;
+        iconData = Icons.local_shipping_outlined;
         iconBg = colorScheme.surfaceContainerHighest;
         iconFg = colorScheme.onSurfaceVariant;
+        m3Shape = Shapes.square;
+        break;
+      case IncidentType.motionDetected:
+        iconData = Icons.notifications_none;
+        iconBg = colorScheme.surfaceContainerHighest;
+        iconFg = colorScheme.onSurfaceVariant;
+        m3Shape = Shapes.circle;
         break;
     }
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Card(
-        elevation: 0,
-        color: incident.processed
-            ? colorScheme.surfaceContainerLowest
-            : colorScheme.surfaceContainerLow,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: BorderSide(
-            color: incident.processed
-                ? colorScheme.outlineVariant.withValues(alpha: 0.3)
-                : colorScheme.outlineVariant.withValues(alpha: 0.6),
+    return TweenAnimationBuilder<double>(
+      duration: Duration(milliseconds: 200 + (index * 35).clamp(0, 300)),
+      curve: Curves.easeOutCubic,
+      tween: Tween<double>(begin: 0.0, end: 1.0),
+      builder: (context, value, child) {
+        return Opacity(
+          opacity: value,
+          child: Transform.translate(
+            offset: Offset(0, 12 * (1 - value)),
+            child: child,
           ),
-        ),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(16),
-          onTap: () {
-            showDialog(
-              context: context,
-              builder: (_) => IncidentDetailDialog(
-                incident: incident,
-                state: widget.state,
-              ),
-            );
-          },
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Tonal circle icon matching M3 specs
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
+        );
+      },
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: Card(
+          elevation: 0,
+          color: incident.processed
+              ? colorScheme.surfaceContainerLowest
+              : colorScheme.surfaceContainerLow,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+            side: BorderSide(
+              color: incident.processed
+                  ? colorScheme.outlineVariant.withValues(alpha: 0.3)
+                  : colorScheme.outlineVariant.withValues(alpha: 0.6),
+            ),
+          ),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(18),
+            onTap: () {
+              showDialog(
+                context: context,
+                builder: (_) => IncidentDetailDialog(
+                  incident: incident,
+                  state: widget.state,
+                ),
+              );
+            },
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  M3Container(
+                    m3Shape,
+                    width: 42,
+                    height: 42,
                     color: iconBg,
-                    shape: BoxShape.circle,
+                    child: Center(
+                      child: Icon(iconData, color: iconFg, size: 20),
+                    ),
                   ),
-                  child: Icon(iconData, color: iconFg, size: 20),
-                ),
-                const SizedBox(width: 12),
-
-                // Content
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Expanded(
-                            child: Text(
-                              incident.type.labelRu,
-                              style: theme.textTheme.titleSmall?.copyWith(
-                                fontWeight: FontWeight.bold,
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                incident.type.labelRu,
+                                style: theme.textTheme.titleSmall?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
                             ),
-                          ),
-                          Text(
-                            _formatTime(incident.occurredAt),
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
+                            Text(
+                              _formatTime(incident.occurredAt),
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: colorScheme.onSurfaceVariant,
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 3),
-                      Text(
-                        incident.description,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
+                          ],
                         ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
+                        const SizedBox(height: 3),
+                        Text(
+                          incident.description,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),

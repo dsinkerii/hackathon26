@@ -1,3 +1,4 @@
+import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter/material.dart';
 import 'state/app_state.dart';
 import 'ui/screens/main_shell.dart';
@@ -21,13 +22,26 @@ class PlayGuardApp extends StatelessWidget {
       builder: (context, _) {
         final settings = state.settings;
 
-        return MaterialApp(
-          title: 'PlayGuardAI',
-          debugShowCheckedModeBanner: false,
-          theme: AppTheme.lightTheme(settings.seedColor),
-          darkTheme: AppTheme.darkTheme(settings.seedColor),
-          themeMode: settings.themeMode,
-          home: MainShell(state: state),
+        return DynamicColorBuilder(
+          builder: (ColorScheme? lightDynamic, ColorScheme? darkDynamic) {
+            final isDefaultSeed =
+                settings.seedColor == const Color(0xFF6750A4);
+
+            return MaterialApp(
+              title: 'PlayGuardAI',
+              debugShowCheckedModeBanner: false,
+              theme: AppTheme.lightTheme(
+                settings.seedColor,
+                isDefaultSeed ? lightDynamic : null,
+              ),
+              darkTheme: AppTheme.darkTheme(
+                settings.seedColor,
+                isDefaultSeed ? darkDynamic : null,
+              ),
+              themeMode: settings.themeMode,
+              home: MainShell(state: state),
+            );
+          },
         );
       },
     );

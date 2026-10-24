@@ -30,7 +30,7 @@ class CustomBottomNavBar extends StatelessWidget {
       ),
       child: Material(
         elevation: 2,
-        shadowColor: Colors.black.withValues(alpha: 0.15),
+        shadowColor: Colors.black.withValues(alpha: 0.12),
         color: colorScheme.surfaceContainer,
         borderRadius: BorderRadius.circular(28),
         clipBehavior: Clip.antiAlias,
@@ -91,7 +91,7 @@ class CustomBottomNavBar extends StatelessWidget {
 
     Widget iconWidget = Icon(
       isActive ? activeIcon : icon,
-      size: 22,
+      size: 24,
       color: itemColor,
     );
 
@@ -112,23 +112,30 @@ class CustomBottomNavBar extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            iconWidget,
-            const SizedBox(height: 2),
-            Text(
-              label,
+            AnimatedScale(
+              scale: isActive ? 1.08 : 1.0,
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeOutBack,
+              child: iconWidget,
+            ),
+            const SizedBox(height: 3),
+            AnimatedDefaultTextStyle(
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeInOut,
               style: TextStyle(
                 fontSize: 11,
                 fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
                 color: itemColor,
                 letterSpacing: 0.1,
               ),
+              child: Text(label),
             ),
-            const SizedBox(height: 2),
-            // Penpot Active Indicator: small rounded line below the label
+            const SizedBox(height: 3),
+            // Sleek active indicator line
             AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              curve: Curves.easeInOut,
-              width: isActive ? 32 : 0,
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeOutCubic,
+              width: isActive ? 28 : 0,
               height: 3,
               decoration: BoxDecoration(
                 color: isActive ? colorScheme.primary : Colors.transparent,

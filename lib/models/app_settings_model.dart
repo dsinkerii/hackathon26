@@ -46,7 +46,7 @@ class AppSettings {
       'apartment': apartment,
       'address': address,
       'themeMode': themeMode.name,
-      'seedColor': seedColor.value,
+      'seedColor': seedColor.toARGB32(),
       'notificationsEnabled': notificationsEnabled,
       'backendUrl': backendUrl,
     };

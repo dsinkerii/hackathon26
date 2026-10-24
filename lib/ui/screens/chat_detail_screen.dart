@@ -19,15 +19,27 @@ class ChatDetailScreen extends StatefulWidget {
 class _ChatDetailScreenState extends State<ChatDetailScreen> {
   final TextEditingController _textController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
+  bool _canSend = false;
 
   @override
   void initState() {
     super.initState();
     widget.state.markChatAsRead(widget.chat.id);
+    _textController.addListener(_onTextChanged);
+  }
+
+  void _onTextChanged() {
+    final canSend = _textController.text.trim().isNotEmpty;
+    if (canSend != _canSend) {
+      setState(() {
+        _canSend = canSend;
+      });
+    }
   }
 
   @override
   void dispose() {
+    _textController.removeListener(_onTextChanged);
     _textController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -44,8 +56,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
           _scrollController.position.maxScrollExtent + 80,
-          duration: const Duration(milliseconds: 250),
-          curve: Curves.easeOut,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOutCubic,
         );
       }
     });
@@ -53,8 +65,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
+    final colorScheme = Theme.of(context).colorScheme;
     final chat = widget.state.chats.firstWhere(
       (c) => c.id == widget.chat.id,
       orElse: () => widget.chat,
@@ -63,24 +74,33 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     return Scaffold(
       appBar: AppBar(
         titleSpacing: 0,
+        scrolledUnderElevation: 3,
         title: Row(
           children: [
-            CircleAvatar(
-              radius: 18,
-              backgroundColor: colorScheme.primaryContainer,
-              child: chat.avatarAsset != null
-                  ? ClipOval(
-                      child: Image.asset(
-                        chat.avatarAsset!,
-                        width: 36,
-                        height: 36,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => Text(chat.avatarLetter ?? 'Ч'),
-                      ),
-                    )
-                  : (chat.isGroup
-                      ? const Icon(Icons.people, size: 20)
-                      : Text(chat.avatarLetter ?? 'Ч')),
+            Hero(
+              tag: 'chat_avatar_${chat.id}',
+              child: CircleAvatar(
+                radius: 18,
+                backgroundColor: colorScheme.primaryContainer,
+                child: chat.avatarAsset != null
+                    ? ClipOval(
+                        child: Image.asset(
+                          chat.avatarAsset!,
+                          width: 36,
+                          height: 36,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, _, _) =>
+                              Text(chat.avatarLetter ?? 'Ч'),
+                        ),
+                      )
+                    : (chat.isGroup
+                        ? Icon(
+                            Icons.people,
+                            color: colorScheme.onPrimaryContainer,
+                            size: 20,
+                          )
+                        : Text(chat.avatarLetter ?? 'Ч')),
+              ),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -89,7 +109,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                 children: [
                   Text(
                     chat.title,
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -99,7 +119,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                       fontSize: 12,
                       color: chat.isGroup
                           ? colorScheme.onSurfaceVariant
-                          : Theme.of(context).colorScheme.primary,
+                          : colorScheme.primary,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
@@ -140,29 +160,25 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
             ),
           ),
 
-          // Message Input Field
+          // Message Input Field in Material You style
           SafeArea(
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              padding: const EdgeInsets.fromLTRB(12, 6, 12, 10),
               decoration: BoxDecoration(
                 color: colorScheme.surface,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.04),
-                    blurRadius: 4,
-                    offset: const Offset(0, -2),
-                  ),
-                ],
               ),
               child: Row(
                 children: [
                   IconButton(
-                    icon: const Icon(Icons.attach_file),
-                    tooltip: 'Прикрепить файл',
+                    icon: const Icon(Icons.attach_file_rounded),
+                    tooltip: 'Прикрепить',
+                    style: IconButton.styleFrom(
+                      foregroundColor: colorScheme.onSurfaceVariant,
+                    ),
                     onPressed: () {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
-                          content: Text('Прикрепление фото / видео с камеры'),
+                          content: Text('Прикрепление медиафайлов'),
                         ),
                       );
                     },
@@ -171,8 +187,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       decoration: BoxDecoration(
-                        color: colorScheme.surfaceContainerHighest.withOpacity(0.5),
-                        borderRadius: BorderRadius.circular(24),
+                        color: colorScheme.surfaceContainerHigh,
+                        borderRadius: BorderRadius.circular(28),
                       ),
                       child: TextField(
                         controller: _textController,
@@ -181,17 +197,39 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                         decoration: const InputDecoration(
                           hintText: 'Сообщение соседям...',
                           border: InputBorder.none,
+                          focusedBorder: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                          filled: false,
                           isDense: true,
-                          contentPadding: EdgeInsets.symmetric(vertical: 12),
+                          contentPadding: EdgeInsets.symmetric(vertical: 14),
                         ),
                       ),
                     ),
                   ),
                   const SizedBox(width: 8),
-                  IconButton.filled(
-                    onPressed: _sendMessage,
-                    icon: const Icon(Icons.send_rounded),
-                    tooltip: 'Отправить',
+                  AnimatedScale(
+                    scale: _canSend ? 1.0 : 0.95,
+                    duration: const Duration(milliseconds: 200),
+                    curve: Curves.easeOutBack,
+                    child: IconButton.filled(
+                      style: IconButton.styleFrom(
+                        backgroundColor: colorScheme.primary,
+                        foregroundColor: colorScheme.onPrimary,
+                        padding: const EdgeInsets.all(12),
+                      ),
+                      onPressed: _canSend ? _sendMessage : null,
+                      icon: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 200),
+                        transitionBuilder: (child, anim) =>
+                            ScaleTransition(scale: anim, child: child),
+                        child: Icon(
+                          _canSend ? Icons.send_rounded : Icons.mic_rounded,
+                          key: ValueKey<bool>(_canSend),
+                          size: 20,
+                        ),
+                      ),
+                      tooltip: _canSend ? 'Отправить' : 'Голосовое сообщение',
+                    ),
                   ),
                 ],
               ),
@@ -203,13 +241,12 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   }
 
   Widget _buildMessageBubble(BuildContext context, ChatMessage msg) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
+    final colorScheme = Theme.of(context).colorScheme;
     final isMe = msg.isMe;
 
     final bubbleBg = isMe
         ? colorScheme.primaryContainer
-        : colorScheme.surfaceContainerHighest;
+        : colorScheme.surfaceContainerHigh;
     final textColor = isMe
         ? colorScheme.onPrimaryContainer
         : colorScheme.onSurface;
@@ -242,10 +279,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
               decoration: BoxDecoration(
                 color: bubbleBg,
                 borderRadius: BorderRadius.only(
-                  topLeft: const Radius.circular(18),
-                  topRight: const Radius.circular(18),
-                  bottomLeft: Radius.circular(isMe ? 18 : 4),
-                  bottomRight: Radius.circular(isMe ? 4 : 18),
+                  topLeft: const Radius.circular(20),
+                  topRight: const Radius.circular(20),
+                  bottomLeft: Radius.circular(isMe ? 20 : 4),
+                  bottomRight: Radius.circular(isMe ? 4 : 20),
                 ),
               ),
               child: Column(
@@ -279,7 +316,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                         _formatTime(msg.timestamp),
                         style: TextStyle(
                           fontSize: 10,
-                          color: textColor.withOpacity(0.6),
+                          color: textColor.withValues(alpha: 0.65),
                         ),
                       ),
                       if (isMe) ...[

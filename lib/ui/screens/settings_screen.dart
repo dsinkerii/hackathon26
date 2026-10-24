@@ -49,9 +49,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final s = widget.state.settings;
     return _nameController.text.trim() != s.userName ||
         _apartmentController.text.trim() != s.apartment ||
-        _addressController.text.trim() != s.address ||
-        _themeMode != s.themeMode ||
-        _seedColor.value != s.seedColor.value;
+        _addressController.text.trim() != s.address;
   }
 
   void _save() {
@@ -200,9 +198,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           ],
                           selected: {_themeMode},
                           onSelectionChanged: (set) {
+                            final newMode = set.first;
                             setState(() {
-                              _themeMode = set.first;
+                              _themeMode = newMode;
                             });
+                            widget.state.updateSettings(
+                              widget.state.settings.copyWith(themeMode: newMode),
+                            );
                           },
                         ),
                       ),
@@ -219,7 +221,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         scrollDirection: Axis.horizontal,
                         child: Row(
                           children: _paletteColors.map((color) {
-                            final isSelected = _seedColor.value == color.value;
+                            final isSelected =
+                                _seedColor.toARGB32() == color.toARGB32();
                             return Padding(
                               padding: const EdgeInsets.only(right: 14),
                               child: InkWell(
@@ -227,11 +230,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                   setState(() {
                                     _seedColor = color;
                                   });
+                                  widget.state.updateSettings(
+                                    widget.state.settings.copyWith(seedColor: color),
+                                  );
                                 },
                                 borderRadius: BorderRadius.circular(24),
-                                child: Container(
-                                  width: 44,
-                                  height: 44,
+                                child: AnimatedContainer(
+                                  duration: const Duration(milliseconds: 250),
+                                  curve: Curves.easeOutBack,
+                                  width: isSelected ? 48 : 42,
+                                  height: isSelected ? 48 : 42,
                                   decoration: BoxDecoration(
                                     color: color,
                                     shape: BoxShape.circle,

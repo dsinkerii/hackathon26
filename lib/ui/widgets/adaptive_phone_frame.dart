@@ -63,13 +63,16 @@ class _AdaptivePhoneFrameState extends State<AdaptivePhoneFrame> {
                     borderRadius: BorderRadius.circular(36),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.18),
+                        color: Colors.black.withValues(alpha: 0.18),
                         blurRadius: 30,
                         offset: const Offset(0, 10),
                       ),
                     ],
                     border: Border.all(
-                      color: Theme.of(context).colorScheme.outlineVariant.withOpacity(0.5),
+                      color: Theme.of(context)
+                          .colorScheme
+                          .outlineVariant
+                          .withValues(alpha: 0.5),
                       width: 4,
                     ),
                   ),

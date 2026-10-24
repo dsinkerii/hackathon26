@@ -16,162 +16,198 @@ class IncidentDetailDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-
-    final isCar = incident.type == IncidentType.carOnPlayground;
     final isStranger = incident.type == IncidentType.strangerDetected;
 
-    IconData dialogIcon = Icons.info_outline;
-    Color iconColor = colorScheme.primary;
-
-    if (isCar) {
-      dialogIcon = Icons.warning_amber_rounded;
-      iconColor = colorScheme.error;
-    } else if (isStranger) {
-      dialogIcon = Icons.person_search_outlined;
-      iconColor = Colors.orange;
-    } else if (incident.type == IncidentType.doorOpened) {
-      dialogIcon = Icons.door_sliding_outlined;
-      iconColor = Colors.blue;
-    }
+    final bannerUrl = incident.snapshotUrl ??
+        (incident.type == IncidentType.carOnPlayground
+            ? 'assets/images/banner.png'
+            : 'assets/images/porch_camera.png');
 
     return Dialog(
+      backgroundColor: colorScheme.surfaceContainerHigh,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-      child: Padding(
-        padding: const EdgeInsets.all(24),
+      clipBehavior: Clip.antiAlias,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: 420,
+          maxHeight: MediaQuery.sizeOf(context).height * 0.85,
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Icon + Title matching Penpot Simple Dialog
-            Center(
-              child: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: iconColor.withOpacity(0.12),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(dialogIcon, size: 36, color: iconColor),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              incident.type.labelRu,
-              style: theme.textTheme.headlineSmall?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              incident.description,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: colorScheme.onSurfaceVariant,
-              ),
-              textAlign: TextAlign.center,
-            ),
-
-            if (incident.snapshotUrl != null) ...[
-              const SizedBox(height: 16),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(16),
-                child: Image.asset(
-                  incident.snapshotUrl!,
-                  height: 140,
-                  width: double.infinity,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => Container(
-                    height: 140,
-                    color: colorScheme.surfaceContainerHighest,
-                    child: Center(
-                      child: Icon(Icons.image_not_supported,
-                          color: colorScheme.onSurfaceVariant),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: colorScheme.surfaceContainerHighest.withOpacity(0.5),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Column(
-                children: [
-                  _buildMetaRow(
-                    context,
-                    label: 'Время:',
-                    value: _formatDate(incident.occurredAt),
-                  ),
-                  if (incident.confidence != null) ...[
-                    const SizedBox(height: 6),
-                    _buildMetaRow(
-                      context,
-                      label: 'Уверенность ИИ:',
-                      value: '${(incident.confidence! * 100).toInt()}%',
-                    ),
-                  ],
-                  if (incident.stranger != null) ...[
-                    const SizedBox(height: 6),
-                    _buildMetaRow(
-                      context,
-                      label: 'Посещений:',
-                      value: '${incident.stranger!.visitCount} раза',
-                    ),
-                  ],
-                  const SizedBox(height: 6),
-                  _buildMetaRow(
-                    context,
-                    label: 'Статус:',
-                    value: incident.processed ? 'Обработано' : 'Требует внимания',
-                    valueColor: incident.processed ? Colors.green : Colors.red,
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 24),
-
-            // Actions matching Penpot Text Buttons
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
+            // Top Preview Banner replacing the top icon
+            Stack(
               children: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Закрыть'),
+                SizedBox(
+                  height: 160,
+                  width: double.infinity,
+                  child: Image.asset(
+                    bannerUrl,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) => Container(
+                      height: 160,
+                      color: colorScheme.surfaceContainerHighest,
+                      child: Center(
+                        child: Icon(
+                          Icons.image_outlined,
+                          size: 48,
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
-                const SizedBox(width: 8),
-                if (isStranger && !incident.processed)
-                  FilledButton.tonal(
-                    onPressed: () {
-                      state.approveStranger(incident.stranger!.id, 'Сосед');
-                      Navigator.pop(context);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Посетитель добавлен в белый список'),
-                        ),
-                      );
-                    },
-                    child: const Text('В белый список'),
+                Positioned.fill(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.black.withValues(alpha: 0.35),
+                          Colors.transparent,
+                          Colors.black.withValues(alpha: 0.5),
+                        ],
+                      ),
+                    ),
                   ),
-                if (!incident.processed) ...[
-                  const SizedBox(width: 8),
-                  FilledButton(
-                    onPressed: () {
-                      state.acknowledgeIncident(incident.id);
-                      Navigator.pop(context);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Событие подтверждено и закрыто'),
-                        ),
-                      );
-                    },
-                    child: const Text('Принять'),
+                ),
+                Positioned(
+                  top: 12,
+                  left: 12,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: colorScheme.primary,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      incident.type.labelRu,
+                      style: TextStyle(
+                        color: colorScheme.onPrimary,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ),
-                ],
+                ),
+                Positioned(
+                  top: 6,
+                  right: 6,
+                  child: IconButton(
+                    icon: const Icon(Icons.close, color: Colors.white),
+                    tooltip: 'Закрыть',
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ),
               ],
+            ),
+
+            // Scrollable Content area (guaranteed no overflows)
+            Flexible(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      incident.description,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: colorScheme.onSurface,
+                        height: 1.4,
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+
+                    // Metadata Box
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.45),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Column(
+                        children: [
+                          _buildMetaRow(
+                            context,
+                            label: 'Время события:',
+                            value: _formatDate(incident.occurredAt),
+                          ),
+                          if (incident.confidence != null) ...[
+                            const SizedBox(height: 6),
+                            _buildMetaRow(
+                              context,
+                              label: 'Точность детекции:',
+                              value: '${(incident.confidence! * 100).toInt()}%',
+                            ),
+                          ],
+                          if (incident.stranger != null) ...[
+                            const SizedBox(height: 6),
+                            _buildMetaRow(
+                              context,
+                              label: 'Визитов зафиксировано:',
+                              value: '${incident.stranger!.visitCount} раза',
+                            ),
+                          ],
+                          const SizedBox(height: 6),
+                          _buildMetaRow(
+                            context,
+                            label: 'Статус:',
+                            value: incident.processed ? 'Обработано' : 'Новое событие',
+                            valueColor: colorScheme.primary,
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 18),
+
+                    // Actions in a responsive Wrap (no horizontal overflow)
+                    Wrap(
+                      alignment: WrapAlignment.end,
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context),
+                          child: const Text('Закрыть'),
+                        ),
+                        if (isStranger && !incident.processed)
+                          FilledButton.tonal(
+                            onPressed: () {
+                              state.approveStranger(incident.stranger!.id, 'Сосед');
+                              Navigator.pop(context);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Посетитель добавлен в белый список'),
+                                ),
+                              );
+                            },
+                            child: const Text('В белый список'),
+                          ),
+                        if (!incident.processed)
+                          FilledButton(
+                            onPressed: () {
+                              state.acknowledgeIncident(incident.id);
+                              Navigator.pop(context);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Событие подтверждено'),
+                                ),
+                              );
+                            },
+                            child: const Text('Принять'),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
             ),
           ],
         ),
@@ -179,13 +215,22 @@ class IncidentDetailDialog extends StatelessWidget {
     );
   }
 
-  Widget _buildMetaRow(BuildContext context,
-      {required String label, required String value, Color? valueColor}) {
+  Widget _buildMetaRow(
+    BuildContext context, {
+    required String label,
+    required String value,
+    Color? valueColor,
+  }) {
     final theme = Theme.of(context);
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: theme.textTheme.bodySmall),
+        Text(
+          label,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+        ),
         Text(
           value,
           style: theme.textTheme.bodySmall?.copyWith(

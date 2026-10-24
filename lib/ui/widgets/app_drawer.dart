@@ -17,18 +17,22 @@ class AppDrawer extends StatelessWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
+    final unreadChats =
+        state.chats.fold<int>(0, (sum, c) => sum + c.unreadCount);
+
     return Drawer(
+      backgroundColor: colorScheme.surfaceContainerLow,
       child: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Drawer Header
+            // Drawer Header in Material You styling
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
                 borderRadius: const BorderRadius.only(
-                  bottomRight: Radius.circular(24),
+                  bottomRight: Radius.circular(28),
                 ),
               ),
               child: Column(
@@ -81,8 +85,11 @@ class AppDrawer extends StatelessWidget {
                   const SizedBox(height: 12),
                   Row(
                     children: [
-                      Icon(Icons.location_on_outlined,
-                          size: 16, color: colorScheme.onSurfaceVariant),
+                      Icon(
+                        Icons.location_on_outlined,
+                        size: 16,
+                        color: colorScheme.onSurfaceVariant,
+                      ),
                       const SizedBox(width: 6),
                       Expanded(
                         child: Text(
@@ -100,70 +107,64 @@ class AppDrawer extends StatelessWidget {
               ),
             ),
 
-            const SizedBox(height: 8),
+            const SizedBox(height: 12),
 
-            // Navigation Items
+            // Material 3 Navigation Items with Stadium selection
             Expanded(
               child: ListView(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                 children: [
-                  ListTile(
-                    leading: const Icon(Icons.videocam_outlined),
-                    title: const Text('Подъезд и камера'),
-                    selected: state.selectedTabIndex == 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(28),
-                    ),
+                  _buildDrawerTile(
+                    context,
+                    icon: Icons.videocam_outlined,
+                    selectedIcon: Icons.videocam,
+                    title: 'Подъезд и камера',
+                    isSelected: state.selectedTabIndex == 0,
                     onTap: () {
                       Navigator.pop(context);
                       onSelectTab(0);
                     },
                   ),
-                  ListTile(
-                    leading: Badge(
-                      isLabelVisible: state.chats.any((c) => c.unreadCount > 0),
-                      label: Text(
-                        '${state.chats.fold<int>(0, (sum, c) => sum + c.unreadCount)}',
-                      ),
-                      backgroundColor: colorScheme.primary,
-                      textColor: colorScheme.onPrimary,
-                      child: const Icon(Icons.chat_bubble_outline),
-                    ),
-                    title: const Text('Соседские чаты'),
-                    selected: state.selectedTabIndex == 1,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(28),
-                    ),
+                  _buildDrawerTile(
+                    context,
+                    icon: Icons.chat_bubble_outline,
+                    selectedIcon: Icons.chat_bubble,
+                    title: 'Соседские чаты',
+                    isSelected: state.selectedTabIndex == 1,
+                    badgeCount: unreadChats,
                     onTap: () {
                       Navigator.pop(context);
                       onSelectTab(1);
                     },
                   ),
-                  ListTile(
-                    leading: Badge(
-                      isLabelVisible: state.unprocessedIncidentsCount > 0,
-                      label: Text('${state.unprocessedIncidentsCount}'),
-                      backgroundColor: colorScheme.primary,
-                      textColor: colorScheme.onPrimary,
-                      child: const Icon(Icons.history_outlined),
-                    ),
-                    title: const Text('Журнал событий'),
-                    selected: state.selectedTabIndex == 2,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(28),
-                    ),
+                  _buildDrawerTile(
+                    context,
+                    icon: Icons.list_alt_outlined,
+                    selectedIcon: Icons.list_alt,
+                    title: 'Журнал событий',
+                    isSelected: state.selectedTabIndex == 2,
+                    badgeCount: state.unprocessedIncidentsCount,
                     onTap: () {
                       Navigator.pop(context);
                       onSelectTab(2);
                     },
                   ),
-                  const Divider(height: 24),
-                  ListTile(
-                    leading: const Icon(Icons.settings_outlined),
-                    title: const Text('Настройки'),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(28),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
                     ),
+                    child: Divider(
+                      height: 1,
+                      color: colorScheme.outlineVariant.withValues(alpha: 0.4),
+                    ),
+                  ),
+                  _buildDrawerTile(
+                    context,
+                    icon: Icons.settings_outlined,
+                    selectedIcon: Icons.settings,
+                    title: 'Настройки',
+                    isSelected: false,
                     onTap: () {
                       Navigator.pop(context);
                       Navigator.of(context).push(
@@ -173,12 +174,12 @@ class AppDrawer extends StatelessWidget {
                       );
                     },
                   ),
-                  ListTile(
-                    leading: const Icon(Icons.info_outline),
-                    title: const Text('О системе'),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(28),
-                    ),
+                  _buildDrawerTile(
+                    context,
+                    icon: Icons.info_outline,
+                    selectedIcon: Icons.info,
+                    title: 'О системе',
+                    isSelected: false,
                     onTap: () {
                       Navigator.pop(context);
                       _showAboutDialog(context);
@@ -193,6 +194,56 @@ class AppDrawer extends StatelessWidget {
     );
   }
 
+  Widget _buildDrawerTile(
+    BuildContext context, {
+    required IconData icon,
+    required IconData selectedIcon,
+    required String title,
+    required bool isSelected,
+    int badgeCount = 0,
+    required VoidCallback onTap,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    Widget iconWidget = Icon(
+      isSelected ? selectedIcon : icon,
+      color: isSelected
+          ? colorScheme.onSecondaryContainer
+          : colorScheme.onSurfaceVariant,
+      size: 22,
+    );
+
+    if (badgeCount > 0) {
+      iconWidget = Badge(
+        label: Text('$badgeCount'),
+        backgroundColor: colorScheme.primary,
+        textColor: colorScheme.onPrimary,
+        child: iconWidget,
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: ListTile(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+        selected: isSelected,
+        selectedTileColor: colorScheme.secondaryContainer,
+        leading: iconWidget,
+        title: Text(
+          title,
+          style: TextStyle(
+            color: isSelected
+                ? colorScheme.onSecondaryContainer
+                : colorScheme.onSurface,
+            fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+            fontSize: 14,
+          ),
+        ),
+        onTap: onTap,
+      ),
+    );
+  }
+
   void _showAboutDialog(BuildContext context) {
     showDialog(
       context: context,
@@ -200,13 +251,13 @@ class AppDrawer extends StatelessWidget {
         title: const Text('PlayGuardAI'),
         content: const Text(
           'Интеллектуальная система безопасности двора и подъезда.\n\n'
-          '- Мониторинг детской площадки в реальном времени\n'
-          '- Детекция автомобилей на запретной территории\n'
-          '- Распознавание незнакомцев и белый список соседей\n'
-          '- Умный домофон и внутридомовые чаты',
+          '• Мониторинг детской площадки в реальном времени\n'
+          '• Детекция автомобилей на запретной территории\n'
+          '• Распознавание незнакомцев и белый список соседей\n'
+          '• Умный домофон и внутридомовые чаты',
         ),
         actions: [
-          TextButton(
+          FilledButton.tonal(
             onPressed: () => Navigator.pop(ctx),
             child: const Text('Понятно'),
           ),

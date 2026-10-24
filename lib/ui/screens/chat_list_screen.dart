@@ -26,8 +26,11 @@ class ChatListScreen extends StatelessWidget {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.chat_bubble_outline,
-                      size: 48, color: colorScheme.onSurfaceVariant),
+                  Icon(
+                    Icons.chat_bubble_outline,
+                    size: 48,
+                    color: colorScheme.onSurfaceVariant,
+                  ),
                   const SizedBox(height: 12),
                   Text(
                     'Чатов не найдено',
@@ -43,155 +46,189 @@ class ChatListScreen extends StatelessWidget {
               itemCount: chats.length,
               separatorBuilder: (context, index) => Divider(
                 height: 1,
-                indent: 72,
+                indent: 76,
                 endIndent: 16,
-                color: colorScheme.outlineVariant.withOpacity(0.4),
+                color: colorScheme.outlineVariant.withValues(alpha: 0.35),
               ),
               itemBuilder: (context, index) {
                 final chat = chats[index];
-                return _buildChatTile(context, chat);
+                return _M3ChatTile(
+                  key: ValueKey(chat.id),
+                  chat: chat,
+                  index: index,
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => ChatDetailScreen(chat: chat, state: state),
+                      ),
+                    );
+                  },
+                );
               },
             ),
     );
   }
+}
 
-  Widget _buildChatTile(BuildContext context, Chat chat) {
+class _M3ChatTile extends StatelessWidget {
+  final Chat chat;
+  final int index;
+  final VoidCallback onTap;
+
+  const _M3ChatTile({
+    super.key,
+    required this.chat,
+    required this.index,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
-    return InkWell(
-      onTap: () {
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => ChatDetailScreen(chat: chat, state: state),
+    // Smooth staggered entrance animation matching M3 standard motion (250ms with curve)
+    return TweenAnimationBuilder<double>(
+      duration: Duration(milliseconds: 200 + (index * 40).clamp(0, 300)),
+      curve: Curves.easeOutCubic,
+      tween: Tween<double>(begin: 0.0, end: 1.0),
+      builder: (context, value, child) {
+        return Opacity(
+          opacity: value,
+          child: Transform.translate(
+            offset: Offset(0, 16 * (1 - value)),
+            child: child,
           ),
         );
       },
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Avatar Container matching Penpot
-            Hero(
-              tag: 'chat_avatar_${chat.id}',
-              child: CircleAvatar(
-                radius: 24,
-                backgroundColor: chat.isGroup
-                    ? colorScheme.primaryContainer
-                    : colorScheme.secondaryContainer,
-                child: chat.avatarAsset != null
-                    ? ClipOval(
-                        child: Image.asset(
-                          chat.avatarAsset!,
-                          width: 48,
-                          height: 48,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Text(
-                            chat.avatarLetter ?? 'Ч',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: colorScheme.onSecondaryContainer,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Avatar Container
+              Hero(
+                tag: 'chat_avatar_${chat.id}',
+                child: CircleAvatar(
+                  radius: 24,
+                  backgroundColor: chat.isGroup
+                      ? colorScheme.primaryContainer
+                      : colorScheme.secondaryContainer,
+                  child: chat.avatarAsset != null
+                      ? ClipOval(
+                          child: Image.asset(
+                            chat.avatarAsset!,
+                            width: 48,
+                            height: 48,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, _, _) => Text(
+                              chat.avatarLetter ?? 'Ч',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: colorScheme.onSecondaryContainer,
+                              ),
                             ),
                           ),
-                        ),
-                      )
-                    : (chat.isGroup
-                        ? Icon(
-                            Icons.forum_outlined,
-                            color: colorScheme.onPrimaryContainer,
-                            size: 24,
-                          )
-                        : Text(
-                            chat.avatarLetter ?? 'Ч',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: colorScheme.onSecondaryContainer,
-                            ),
-                          )),
+                        )
+                      : (chat.isGroup
+                          ? Icon(
+                              Icons.people,
+                              color: colorScheme.onPrimaryContainer,
+                              size: 24,
+                            )
+                          : Text(
+                              chat.avatarLetter ?? 'Ч',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: colorScheme.onSecondaryContainer,
+                              ),
+                            )),
+                ),
               ),
-            ),
-            const SizedBox(width: 16),
+              const SizedBox(width: 16),
 
-            // Content matching Penpot
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(
-                        child: Text(
-                          chat.title,
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
+              // Content
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            chat.title,
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
                         ),
-                      ),
-                      // Support Text (Time) matching Penpot
-                      Text(
-                        _formatTime(chat.lastMessageTime),
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: chat.unreadCount > 0
-                              ? colorScheme.primary
-                              : colorScheme.onSurfaceVariant,
-                          fontWeight: chat.unreadCount > 0
-                              ? FontWeight.bold
-                              : FontWeight.normal,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          chat.subtitle,
-                          style: theme.textTheme.bodyMedium?.copyWith(
+                        Text(
+                          _formatTime(chat.lastMessageTime),
+                          style: theme.textTheme.bodySmall?.copyWith(
                             color: chat.unreadCount > 0
-                                ? colorScheme.onSurface
+                                ? colorScheme.primary
                                 : colorScheme.onSurfaceVariant,
                             fontWeight: chat.unreadCount > 0
                                 ? FontWeight.w600
                                 : FontWeight.normal,
                           ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      if (chat.unreadCount > 0) ...[
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: colorScheme.primary,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Text(
-                            '${chat.unreadCount}',
-                            style: TextStyle(
-                              color: colorScheme.onPrimary,
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
                         ),
                       ],
-                    ],
-                  ),
-                ],
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            chat.subtitle,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: chat.unreadCount > 0
+                                  ? colorScheme.onSurface
+                                  : colorScheme.onSurfaceVariant,
+                              fontWeight: chat.unreadCount > 0
+                                  ? FontWeight.w500
+                                  : FontWeight.normal,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (chat.unreadCount > 0) ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: colorScheme.primary,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              '${chat.unreadCount}',
+                              style: TextStyle(
+                                color: colorScheme.onPrimary,
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
