@@ -171,6 +171,12 @@ app.*.symbols
 .agents/rules/personal-*
 .agents/skills/personal-*
 /.agent-shell/
+
+# Spring Boot backend
+/backend/target/
+/backend/data/
+/backend/.env
+
 # FVM
 .fvm/flutter_sdk
 .fvm/versions
