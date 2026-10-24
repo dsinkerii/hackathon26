@@ -211,6 +211,10 @@ class ApiOperatorRepository implements OperatorRepository, AdminRepository {
       _parseList(await _getJson('/api/v1/users'), AdminAccount.fromJson);
 
   @override
+  Future<AdminAccount> fetchProfile() async =>
+      AdminAccount.fromJson(await _getObject('GET', '/api/v1/auth/me'));
+
+  @override
   Future<AdminAccount> createAccount({
     required String username,
     required String password,

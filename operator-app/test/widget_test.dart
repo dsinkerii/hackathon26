@@ -111,6 +111,33 @@ void main() {
     expect(find.text('Уведомления'), findsOneWidget);
     expect(find.text('VEHICLE_IN_ZONE').last, findsOneWidget);
   });
+
+  testWidgets('profile dialog shows the signed-in account details',
+      (tester) async {
+    tester.view.physicalSize = const Size(1280, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(SafePlaygroundApp(repository: _FakeRepository()));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Профиль'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Профиль'), findsOneWidget);
+    expect(find.text('Логин'), findsOneWidget);
+    expect(find.text('Роль'), findsOneWidget);
+    expect(find.text('Статус'), findsOneWidget);
+    expect(find.text('Активна'), findsOneWidget);
+    expect(find.text('ID'), findsOneWidget);
+    expect(find.text('Режим просмотра'), findsWidgets);
+
+    await tester.tap(find.text('Закрыть'));
+    await tester.pumpAndSettle();
+    expect(find.text('Логин'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
 }
 
 class _FakeRepository implements OperatorRepository, AdminRepository {
@@ -263,6 +290,15 @@ class _FakeRepository implements OperatorRepository, AdminRepository {
 
   @override
   Future<List<AdminAccount>> fetchAccounts() async => const [];
+
+  @override
+  Future<AdminAccount> fetchProfile() async => AdminAccount(
+        id: 'profile-1',
+        username: 'admin',
+        role: 'ADMIN',
+        enabled: true,
+        createdAt: DateTime.utc(2026, 1, 1),
+      );
 
   @override
   Future<AdminAccount> createAccount({

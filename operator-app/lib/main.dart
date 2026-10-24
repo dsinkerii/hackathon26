@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'models/admin_account.dart';
 import 'models/incident.dart';
 import 'models/admin_session.dart';
 import 'screens/admin_accounts_screen.dart';
@@ -321,6 +322,7 @@ class _OperatorShellState extends State<OperatorShell> {
         destinations: destinations,
         currentPage: currentPage,
         session: widget.session,
+        adminRepository: adminRepository,
         onSelect: _selectTab,
         onNotifications: () => _showNotifications(context),
         onLogout: widget.onLogout,
@@ -480,6 +482,7 @@ class _MacDesktopWorkspace extends StatelessWidget {
     required this.destinations,
     required this.currentPage,
     required this.session,
+    this.adminRepository,
     required this.onSelect,
     required this.onNotifications,
     required this.onLogout,
@@ -489,6 +492,7 @@ class _MacDesktopWorkspace extends StatelessWidget {
   final List<NavigationDestination> destinations;
   final Widget currentPage;
   final AdminSession? session;
+  final AdminRepository? adminRepository;
   final ValueChanged<int> onSelect;
   final VoidCallback onNotifications;
   final Future<void> Function()? onLogout;
@@ -513,7 +517,11 @@ class _MacDesktopWorkspace extends StatelessWidget {
             ),
           ),
           if (MediaQuery.sizeOf(context).width >= 1080)
-            _MacInspector(session: session, onLogout: onLogout),
+            _MacInspector(
+              session: session,
+              repository: adminRepository,
+              onLogout: onLogout,
+            ),
         ],
       ),
     );
@@ -719,9 +727,14 @@ class _MacSidebarRow extends StatelessWidget {
 }
 
 class _MacInspector extends StatelessWidget {
-  const _MacInspector({required this.session, this.onLogout});
+  const _MacInspector({
+    required this.session,
+    this.repository,
+    this.onLogout,
+  });
 
   final AdminSession? session;
+  final AdminRepository? repository;
   final Future<void> Function()? onLogout;
 
   @override
@@ -896,15 +909,60 @@ class _MacInspector extends StatelessWidget {
   }
 
   Future<void> _openProfile(BuildContext context) async {
+    await showDialog<void>(
+      context: context,
+      builder: (_) => _ProfileDialog(
+        session: session,
+        repository: repository,
+        onLogout: onLogout,
+      ),
+    );
+  }
+}
+
+/// Просмотр профиля текущего пользователя: сведения аккаунта загружаются
+/// с сервера (`GET /api/v1/auth/me`); при недоступности показываются
+/// только данные сеанса.
+class _ProfileDialog extends StatefulWidget {
+  const _ProfileDialog({
+    required this.session,
+    this.repository,
+    this.onLogout,
+  });
+
+  final AdminSession? session;
+  final AdminRepository? repository;
+  final Future<void> Function()? onLogout;
+
+  @override
+  State<_ProfileDialog> createState() => _ProfileDialogState();
+}
+
+class _ProfileDialogState extends State<_ProfileDialog> {
+  late Future<AdminAccount?> _profile = _loadProfile();
+
+  Future<AdminAccount?> _loadProfile() async {
+    final repository = widget.repository;
+    if (repository == null) return null;
+    return repository.fetchProfile();
+  }
+
+  void _retry() {
+    setState(() => _profile = _loadProfile());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final session = widget.session;
     final hasSession = session != null;
     final username = session?.username ?? '';
     final displayName = username.isEmpty ? 'Оператор' : username;
     final role = session?.isAdmin == true ? 'Администратор' : 'Оператор';
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Профиль'),
-        content: Column(
+    return AlertDialog(
+      title: const Text('Профиль'),
+      content: SizedBox(
+        width: 400,
+        child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -948,6 +1006,68 @@ class _MacInspector extends StatelessWidget {
               ],
             ),
             const Divider(height: 24),
+            FutureBuilder<AdminAccount?>(
+              future: _profile,
+              builder: (context, snapshot) {
+                if (snapshot.hasError) {
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.error_outline,
+                            size: 18, color: Color(0xFFFF3B30)),
+                        const SizedBox(width: 7),
+                        const Expanded(
+                          child: Text(
+                            'Не удалось загрузить данные аккаунта.',
+                            style: TextStyle(fontSize: 13),
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: _retry,
+                          child: const Text('Повторить'),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+                if (snapshot.connectionState != ConnectionState.done) {
+                  return const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 14),
+                    child: Center(child: CircularProgressIndicator()),
+                  );
+                }
+                final account = snapshot.data;
+                if (account == null) {
+                  return const Text(
+                    'Подробные сведения аккаунта доступны только при работе с сервером.',
+                    style: TextStyle(fontSize: 13, color: Color(0xFF6E6E73)),
+                  );
+                }
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _detail(Icons.alternate_email, 'Логин', account.username),
+                    _detail(
+                        Icons.shield_outlined,
+                        'Роль',
+                        account.role == 'ADMIN' ? 'Администратор' : 'Оператор'),
+                    _detail(
+                      Icons.verified_user_outlined,
+                      'Статус',
+                      account.enabled ? 'Активна' : 'Отключена',
+                      valueColor: account.enabled
+                          ? const Color(0xFF248A3D)
+                          : const Color(0xFFFF3B30),
+                    ),
+                    _detail(Icons.tag, 'ID', account.id),
+                    _detail(Icons.history, 'Создан',
+                        _formatTimestamp(account.createdAt)),
+                  ],
+                );
+              },
+            ),
+            const Divider(height: 24),
             Row(
               children: [
                 Icon(
@@ -964,7 +1084,7 @@ class _MacInspector extends StatelessWidget {
             if (hasSession) ...[
               const SizedBox(height: 8),
               Text(
-                'Сеанс истекает: ${_formatExpiresAt(session!.expiresAt)}',
+                'Сеанс истекает: ${_formatTimestamp(session.expiresAt)}',
                 style: const TextStyle(fontSize: 13),
               ),
             ],
@@ -975,28 +1095,65 @@ class _MacInspector extends StatelessWidget {
             ),
           ],
         ),
-        actions: [
-          if (hasSession && onLogout != null)
-            TextButton(
-              style: TextButton.styleFrom(
-                foregroundColor: const Color(0xFFFF3B30),
-              ),
-              onPressed: () {
-                Navigator.of(dialogContext).pop();
-                onLogout!();
-              },
-              child: const Text('Выйти'),
-            ),
+      ),
+      actions: [
+        if (hasSession && widget.onLogout != null)
           TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('Закрыть'),
+            style: TextButton.styleFrom(
+              foregroundColor: const Color(0xFFFF3B30),
+            ),
+            onPressed: () {
+              Navigator.of(context).pop();
+              widget.onLogout!();
+            },
+            child: const Text('Выйти'),
+          ),
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Закрыть'),
+        ),
+      ],
+    );
+  }
+
+  Widget _detail(
+    IconData icon,
+    String label,
+    String value, {
+    Color? valueColor,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 18, color: const Color(0xFF6E6E73)),
+          const SizedBox(width: 8),
+          SizedBox(
+            width: 74,
+            child: Text(
+              label,
+              style: const TextStyle(fontSize: 13, color: Color(0xFF6E6E73)),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: valueColor ?? const Color(0xFF1D1D1F),
+              ),
+            ),
           ),
         ],
       ),
     );
   }
 
-  String _formatExpiresAt(DateTime value) {
+  String _formatTimestamp(DateTime value) {
     final local = value.toLocal();
     String two(int number) => number.toString().padLeft(2, '0');
     return '${two(local.day)}.${two(local.month)}.${local.year} '

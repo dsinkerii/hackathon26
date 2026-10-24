@@ -43,6 +43,8 @@ abstract interface class AdminRepository {
   });
   Future<void> deleteRecording(String id);
 
+  Future<AdminAccount> fetchProfile();
+
   Future<List<AdminAccount>> fetchAccounts();
   Future<AdminAccount> createAccount({
     required String username,

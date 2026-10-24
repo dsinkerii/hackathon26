@@ -9,16 +9,20 @@ import jakarta.validation.constraints.Size;
 import java.time.Instant;
 import java.util.Map;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtClaimsSet;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
 import org.springframework.security.oauth2.jwt.JwsHeader;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -70,6 +74,15 @@ public class AuthController {
                 JwsHeader.with(MacAlgorithm.HS256).build(), claims)).getTokenValue();
         return new LoginResponse(token, now.plus(TOKEN_TTL), user.getId(),
                 user.getUsername(), user.getRole().name());
+    }
+
+    @GetMapping("/me")
+    @PreAuthorize("isAuthenticated()")
+    public AdminUserController.UserResponse me(@AuthenticationPrincipal Jwt principal) {
+        AdminUser user = users.findById(principal.getSubject())
+                .orElseThrow(() -> new ApiException(
+                        HttpStatus.UNAUTHORIZED, "ACCOUNT_NOT_FOUND", "Account not found."));
+        return AdminUserController.UserResponse.from(user);
     }
 
     public record LoginRequest(
