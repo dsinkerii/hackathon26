@@ -93,6 +93,31 @@ void main() {
 
     await repository.confirmVisitor('id/with space');
   });
+
+  test('sends bearer token and camera/date filters for recording queries',
+      () async {
+    final client = _FakeHttpClient((request) async {
+      expect(request.headers['Authorization'], 'Bearer test-access-token');
+      expect(request.url.path, '/api/v1/recordings');
+      expect(request.url.queryParameters['cameraId'], 'camera-1');
+      expect(request.url.queryParameters['from'], '2026-10-01T00:00:00.000Z');
+      expect(request.url.queryParameters['to'], '2026-10-02T00:00:00.000Z');
+      return http.Response('[]', 200);
+    });
+    final repository = ApiOperatorRepository(
+      baseUri: Uri.parse('http://localhost:8080'),
+      client: client,
+      tokenProvider: () async => 'test-access-token',
+    );
+
+    final recordings = await repository.fetchRecordings(
+      cameraId: 'camera-1',
+      from: DateTime.utc(2026, 10, 1),
+      to: DateTime.utc(2026, 10, 2),
+    );
+
+    expect(recordings, isEmpty);
+  });
 }
 
 class _FakeHttpClient extends http.BaseClient {

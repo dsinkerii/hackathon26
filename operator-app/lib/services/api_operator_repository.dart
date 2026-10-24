@@ -2,18 +2,32 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../models/admin_account.dart';
+import '../models/camera.dart';
 import '../models/incident.dart';
+import '../models/video_recording.dart';
 import '../models/visitor.dart';
+import 'admin_repository.dart';
 import 'operator_repository.dart';
 
-class ApiOperatorRepository implements OperatorRepository {
+class ApiOperatorRepository implements OperatorRepository, AdminRepository {
   ApiOperatorRepository({
     required Uri baseUri,
     http.Client? client,
+    Future<String?> Function()? tokenProvider,
   })  : _baseUri = baseUri,
-        _client = client ?? http.Client();
+        _client = client ?? http.Client(),
+        _tokenProvider = tokenProvider;
 
-  factory ApiOperatorRepository.fromEnvironment() {
+  factory ApiOperatorRepository.fromEnvironment({
+    Future<String?> Function()? tokenProvider,
+  }) =>
+      ApiOperatorRepository(
+        baseUri: baseUriFromEnvironment(),
+        tokenProvider: tokenProvider,
+      );
+
+  static Uri baseUriFromEnvironment() {
     const baseUrl = String.fromEnvironment(
       'API_BASE_URL',
       defaultValue: 'http://localhost:8080',
@@ -26,11 +40,12 @@ class ApiOperatorRepository implements OperatorRepository {
         'Must be an absolute URL',
       );
     }
-    return ApiOperatorRepository(baseUri: uri);
+    return uri;
   }
 
   final Uri _baseUri;
   final http.Client _client;
+  final Future<String?> Function()? _tokenProvider;
 
   @override
   Future<List<Incident>> fetchIncidents() async {
@@ -57,26 +72,168 @@ class ApiOperatorRepository implements OperatorRepository {
   }
 
   @override
-  Future<void> confirmVisitor(String id) async {
-    final response = await _client.post(
-      _baseUri.resolve('/api/v1/persons/${Uri.encodeComponent(id)}/confirm'),
-      headers: const {'Accept': 'application/json'},
-    ).timeout(const Duration(seconds: 10));
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw ApiException(
-        'Не удалось добавить посетителя в белый список '
-        '(HTTP ${response.statusCode}).',
+  Future<void> confirmVisitor(String id) => _expectSuccess(
+        _request('POST', '/api/v1/persons/${Uri.encodeComponent(id)}/confirm'),
+        'Не удалось добавить посетителя в белый список',
       );
+
+  @override
+  Future<List<Camera>> fetchCameras() async =>
+      _parseList(await _getJson('/api/v1/cameras'), Camera.fromJson);
+
+  @override
+  Future<Camera> createCamera({
+    required String name,
+    String? location,
+    String? streamUrl,
+  }) async =>
+      Camera.fromJson(await _getObject(
+        'POST',
+        '/api/v1/cameras',
+        body: {'name': name, 'location': location, 'streamUrl': streamUrl},
+      ));
+
+  @override
+  Future<Camera> updateCamera(
+    String id, {
+    required String name,
+    String? location,
+    String? streamUrl,
+    required bool enabled,
+  }) async =>
+      Camera.fromJson(await _getObject(
+        'PUT',
+        '/api/v1/cameras/${Uri.encodeComponent(id)}',
+        body: {
+          'name': name,
+          'location': location,
+          'streamUrl': streamUrl,
+          'enabled': enabled,
+        },
+      ));
+
+  @override
+  Future<void> deleteCamera(String id) => _expectSuccess(
+        _request('DELETE', '/api/v1/cameras/${Uri.encodeComponent(id)}'),
+        'Не удалось удалить камеру',
+      );
+
+  @override
+  Future<List<VideoRecording>> fetchRecordings({
+    String? cameraId,
+    bool? withoutCamera,
+    DateTime? from,
+    DateTime? to,
+  }) async {
+    final query = <String, String>{};
+    if (cameraId != null) query['cameraId'] = cameraId;
+    if (withoutCamera != null && withoutCamera) {
+      query['withoutCamera'] = 'true';
     }
+    if (from != null) query['from'] = from.toUtc().toIso8601String();
+    if (to != null) query['to'] = to.toUtc().toIso8601String();
+    return _parseList(
+      await _getJson('/api/v1/recordings', query: query),
+      VideoRecording.fromJson,
+    );
   }
 
-  Future<Object?> _getJson(String path) async {
-    final response = await _client.get(
-      _baseUri.resolve(path),
-      headers: const {'Accept': 'application/json'},
-    ).timeout(const Duration(seconds: 10));
+  @override
+  Future<VideoRecording> createRecording({
+    String? cameraId,
+    required String title,
+    String? eventType,
+    required DateTime recordedAt,
+    int? durationSeconds,
+    required String videoUrl,
+  }) async =>
+      VideoRecording.fromJson(await _getObject(
+        'POST',
+        '/api/v1/recordings',
+        body: _recordingBody(
+          cameraId,
+          title,
+          eventType,
+          recordedAt,
+          durationSeconds,
+          videoUrl,
+        ),
+      ));
+
+  @override
+  Future<VideoRecording> updateRecording(
+    String id, {
+    String? cameraId,
+    required String title,
+    String? eventType,
+    required DateTime recordedAt,
+    int? durationSeconds,
+    required String videoUrl,
+  }) async =>
+      VideoRecording.fromJson(await _getObject(
+        'PUT',
+        '/api/v1/recordings/${Uri.encodeComponent(id)}',
+        body: _recordingBody(
+          cameraId,
+          title,
+          eventType,
+          recordedAt,
+          durationSeconds,
+          videoUrl,
+        ),
+      ));
+
+  Map<String, Object?> _recordingBody(
+    String? cameraId,
+    String title,
+    String? eventType,
+    DateTime recordedAt,
+    int? durationSeconds,
+    String videoUrl,
+  ) =>
+      {
+        'cameraId': cameraId,
+        'title': title,
+        'eventType': eventType,
+        'recordedAt': recordedAt.toUtc().toIso8601String(),
+        'durationSeconds': durationSeconds,
+        'videoUrl': videoUrl,
+      };
+
+  @override
+  Future<void> deleteRecording(String id) => _expectSuccess(
+        _request('DELETE', '/api/v1/recordings/${Uri.encodeComponent(id)}'),
+        'Не удалось удалить запись',
+      );
+
+  @override
+  Future<List<AdminAccount>> fetchAccounts() async =>
+      _parseList(await _getJson('/api/v1/users'), AdminAccount.fromJson);
+
+  @override
+  Future<AdminAccount> createAccount({
+    required String username,
+    required String password,
+    required String role,
+  }) async =>
+      AdminAccount.fromJson(await _getObject(
+        'POST',
+        '/api/v1/users',
+        body: {'username': username, 'password': password, 'role': role},
+      ));
+
+  @override
+  Future<AdminAccount> setAccountEnabled(String id, bool enabled) async =>
+      AdminAccount.fromJson(await _getObject(
+        'PATCH',
+        '/api/v1/users/${Uri.encodeComponent(id)}/enabled',
+        body: {'enabled': enabled},
+      ));
+
+  Future<Object?> _getJson(String path, {Map<String, String>? query}) async {
+    final response = await _request('GET', path, query: query);
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw ApiException('Сервер ответил с кодом HTTP ${response.statusCode}.');
+      throw _apiError(response);
     }
     try {
       return jsonDecode(utf8.decode(response.bodyBytes));
@@ -85,12 +242,68 @@ class ApiOperatorRepository implements OperatorRepository {
     }
   }
 
-  String? _resolveMediaUrl(Object? value) {
-    if (value == null) return null;
-    if (value is! String) {
-      throw const FormatException('Expected a media URL');
+  Future<Map<String, dynamic>> _getObject(
+    String method,
+    String path, {
+    Object? body,
+  }) async {
+    final response = await _request(method, path, body: body);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw _apiError(response);
     }
-    return _baseUri.resolve(value).toString();
+    final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+    if (decoded is! Map<String, dynamic>) {
+      throw const ApiException('Ожидался JSON-объект от сервера.');
+    }
+    return decoded;
+  }
+
+  Future<void> _expectSuccess(
+    Future<http.Response> responseFuture,
+    String errorPrefix,
+  ) async {
+    final response = await responseFuture;
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw ApiException('$errorPrefix: ${_apiError(response)}');
+    }
+  }
+
+  Future<http.Response> _request(
+    String method,
+    String path, {
+    Object? body,
+    Map<String, String>? query,
+  }) async {
+    final token = await _tokenProvider?.call();
+    final uri = _baseUri.resolve(path).replace(queryParameters: query);
+    final headers = <String, String>{'Accept': 'application/json'};
+    if (body != null) headers['Content-Type'] = 'application/json';
+    if (token != null && token.isNotEmpty) {
+      headers['Authorization'] = 'Bearer $token';
+    }
+    final encodedBody = body == null ? null : jsonEncode(body);
+    final request = switch (method) {
+      'GET' => _client.get(uri, headers: headers),
+      'POST' => _client.post(uri, headers: headers, body: encodedBody),
+      'PUT' => _client.put(uri, headers: headers, body: encodedBody),
+      'PATCH' => _client.patch(uri, headers: headers, body: encodedBody),
+      'DELETE' => _client.delete(uri, headers: headers),
+      _ =>
+        throw ArgumentError.value(method, 'method', 'Unsupported HTTP method'),
+    };
+    return request.timeout(const Duration(seconds: 10));
+  }
+
+  ApiException _apiError(http.Response response) {
+    try {
+      final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+      if (decoded is Map<String, dynamic> && decoded['message'] is String) {
+        return ApiException(decoded['message'] as String);
+      }
+    } on FormatException {
+      // Use the HTTP status when the server response is not JSON.
+    }
+    return ApiException('Сервер ответил с кодом HTTP ${response.statusCode}.');
   }
 
   List<T> _parseList<T>(
@@ -110,6 +323,14 @@ class ApiOperatorRepository implements OperatorRepository {
     } on FormatException catch (error) {
       throw ApiException('Некорректные данные от сервера: ${error.message}.');
     }
+  }
+
+  String? _resolveMediaUrl(Object? value) {
+    if (value == null) return null;
+    if (value is! String) {
+      throw const FormatException('Expected a media URL');
+    }
+    return _baseUri.resolve(value).toString();
   }
 }
 

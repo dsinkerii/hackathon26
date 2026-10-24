@@ -35,6 +35,12 @@ public class GlobalExceptionHandler {
                 .body(new ApiError("INVALID_REQUEST", "Request body is invalid."));
     }
 
+    @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
+    public ResponseEntity<ApiError> handleForbidden() {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(new ApiError("FORBIDDEN", "You do not have permission to perform this action."));
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiError> handleUnexpected(Exception exception) {
         log.error("Unhandled API error", exception);

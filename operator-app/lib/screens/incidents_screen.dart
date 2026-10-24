@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/incident.dart';
+import '../services/auth_service.dart';
 import '../services/operator_repository.dart';
 
 class IncidentsScreen extends StatefulWidget {
@@ -22,7 +23,9 @@ class _IncidentsScreenState extends State<IncidentsScreen> {
   }
 
   void _refresh() {
-    setState(() => _incidents = widget.repository.fetchIncidents());
+    setState(() {
+      _incidents = widget.repository.fetchIncidents();
+    });
   }
 
   @override
@@ -120,6 +123,12 @@ Future<void> _showIncidentDetails(
               const SizedBox(height: 16),
               Image.network(
                 incident.snapshotUrl!,
+                headers: AuthService.activeAccessToken == null
+                    ? null
+                    : {
+                        'Authorization':
+                            'Bearer ${AuthService.activeAccessToken}',
+                      },
                 errorBuilder: (context, error, stackTrace) =>
                     const Text('Не удалось загрузить снимок события.'),
               ),

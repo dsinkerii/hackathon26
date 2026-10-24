@@ -16,10 +16,13 @@ public class WebConfig implements WebMvcConfigurer {
 
     @Override
     public void addCorsMappings(CorsRegistry registry) {
-        registry.addMapping("/api/**")
-                .allowedOrigins(properties.cors().allowedOrigins().toArray(String[]::new))
-                .allowedMethods("GET", "POST", "OPTIONS")
-                .allowedHeaders("Accept", "Content-Type", "X-Ingest-Token");
+        String[] origins = properties.cors().allowedOrigins().toArray(String[]::new);
+        for (String path : new String[] {"/api/**", "/media/**"}) {
+            registry.addMapping(path)
+                    .allowedOrigins(origins)
+                    .allowedMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
+                    .allowedHeaders("Accept", "Authorization", "Content-Type", "X-Ingest-Token");
+        }
     }
 
     @Override

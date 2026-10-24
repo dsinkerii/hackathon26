@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/visitor.dart';
+import '../services/auth_service.dart';
 import '../services/operator_repository.dart';
 
 class VisitorsScreen extends StatefulWidget {
@@ -23,7 +24,9 @@ class _VisitorsScreenState extends State<VisitorsScreen> {
   }
 
   void _refresh() {
-    setState(() => _visitors = widget.repository.fetchVisitors());
+    setState(() {
+      _visitors = widget.repository.fetchVisitors();
+    });
   }
 
   Future<void> _confirm(Visitor visitor) async {
@@ -129,7 +132,15 @@ class _VisitorCard extends StatelessWidget {
               leading: CircleAvatar(
                 backgroundImage: visitor.photoUrl == null
                     ? null
-                    : NetworkImage(visitor.photoUrl!),
+                    : NetworkImage(
+                        visitor.photoUrl!,
+                        headers: AuthService.activeAccessToken == null
+                            ? null
+                            : {
+                                'Authorization':
+                                    'Bearer ${AuthService.activeAccessToken}',
+                              },
+                      ),
                 child: visitor.photoUrl == null
                     ? const Icon(Icons.person_outline)
                     : null,

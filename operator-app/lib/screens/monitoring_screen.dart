@@ -2,12 +2,16 @@ import 'package:flutter/material.dart';
 
 import '../models/incident.dart';
 import '../services/operator_repository.dart';
-import 'recordings_screen.dart';
 
 class MonitoringScreen extends StatefulWidget {
-  const MonitoringScreen({super.key, required this.repository});
+  const MonitoringScreen({
+    super.key,
+    required this.repository,
+    this.onOpenRecordings,
+  });
 
   final OperatorRepository repository;
+  final VoidCallback? onOpenRecordings;
 
   @override
   State<MonitoringScreen> createState() => _MonitoringScreenState();
@@ -23,15 +27,21 @@ class _MonitoringScreenState extends State<MonitoringScreen> {
   }
 
   void _refresh() {
-    setState(() => _latestIncidents = widget.repository.fetchIncidents());
+    setState(() {
+      _latestIncidents = widget.repository.fetchIncidents();
+    });
   }
 
   Future<void> _openRecordings() {
-    return Navigator.of(context).push<void>(
-      MaterialPageRoute<void>(
-        builder: (_) => const RecordingsScreen(),
-      ),
+    if (widget.onOpenRecordings case final callback?) {
+      callback();
+      return Future<void>.value();
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+          content: Text('Раздел архива доступен после подключения API.')),
     );
+    return Future<void>.value();
   }
 
   @override
@@ -57,9 +67,25 @@ class _MonitoringScreenState extends State<MonitoringScreen> {
               Row(
                 children: [
                   Expanded(
-                    child: Text(
-                      'Мониторинг',
-                      style: Theme.of(context).textTheme.titleLarge,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Мониторинг',
+                          style: Theme.of(context)
+                              .textTheme
+                              .headlineSmall
+                              ?.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          'Состояние камер и последние события',
+                          style:
+                              Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    color: const Color(0xFF6E6E73),
+                                  ),
+                        ),
+                      ],
                     ),
                   ),
                   _ServiceStatus(incidents: _latestIncidents),
@@ -110,6 +136,9 @@ class _ServiceStatus extends StatelessWidget {
                 ? Theme.of(context).colorScheme.error
                 : Theme.of(context).colorScheme.secondary;
         return Chip(
+          backgroundColor:
+              connected ? const Color(0xFFE7F7ED) : const Color(0xFFF5F5F7),
+          side: BorderSide.none,
           avatar: Icon(
             connected
                 ? Icons.cloud_done_outlined
@@ -150,25 +179,81 @@ class _CameraPanel extends StatelessWidget {
         Expanded(
           child: DecoratedBox(
             decoration: BoxDecoration(
-              color: const Color(0xFF17211E),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: const Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.videocam_off_outlined,
-                    color: Colors.white70,
-                    size: 36,
-                  ),
-                  SizedBox(height: 8),
-                  Text(
-                    'Видеопоток не подключён',
-                    style: TextStyle(color: Colors.white70),
-                  ),
-                ],
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0xFF25252A), Color(0xFF111114)],
               ),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Stack(
+              children: [
+                Positioned(
+                  top: 18,
+                  left: 18,
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: const Color(0x26FFFFFF),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.videocam_outlined,
+                            size: 15, color: Colors.white70),
+                        SizedBox(width: 6),
+                        Text(
+                          'ОБЗОР КАМЕР',
+                          style: TextStyle(
+                            color: Colors.white70,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 0.7,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: Color(0x1FFFFFFF),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Padding(
+                          padding: EdgeInsets.all(18),
+                          child: Icon(
+                            Icons.videocam_off_outlined,
+                            color: Colors.white70,
+                            size: 34,
+                          ),
+                        ),
+                      ),
+                      SizedBox(height: 14),
+                      Text(
+                        'Видеопоток не подключён',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      SizedBox(height: 5),
+                      Text(
+                        'Добавьте камеру, чтобы начать мониторинг',
+                        style:
+                            TextStyle(color: Color(0xFFB7B7BC), fontSize: 13),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ),
         ),
@@ -200,16 +285,32 @@ class _ActivityPanel extends StatelessWidget {
     return Card(
       margin: EdgeInsets.zero,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Row(
               children: [
                 Expanded(
-                  child: Text(
-                    'Последние события',
-                    style: Theme.of(context).textTheme.titleMedium,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Последние события',
+                        style: Theme.of(context)
+                            .textTheme
+                            .titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w700),
+                      ),
+                      const SizedBox(height: 2),
+                      const Text(
+                        'Активность системы',
+                        style: TextStyle(
+                          color: Color(0xFF8E8E93),
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 IconButton(
