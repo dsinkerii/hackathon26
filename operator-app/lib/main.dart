@@ -4,6 +4,7 @@ import 'models/incident.dart';
 import 'screens/incidents_screen.dart';
 import 'screens/monitoring_screen.dart';
 import 'screens/visitors_screen.dart';
+import 'services/alert_stream_service.dart';
 import 'services/api_operator_repository.dart';
 import 'services/operator_repository.dart';
 
@@ -46,6 +47,51 @@ class OperatorShell extends StatefulWidget {
 
 class _OperatorShellState extends State<OperatorShell> {
   int _selectedIndex = 0;
+  int _refreshTick = 0;
+  AlertStreamService? _alerts;
+
+  @override
+  void initState() {
+    super.initState();
+    final repository = widget.repository;
+    if (repository is AlertStreamSource) {
+      _alerts = AlertStreamService(
+        streamUri: repository.alertsStreamUri(),
+        onAlert: _handleAlert,
+      )..start();
+    }
+  }
+
+  @override
+  void dispose() {
+    _alerts?.dispose();
+    super.dispose();
+  }
+
+  /// Live feed: an alert forces every journal to refetch and pops a banner.
+  void _handleAlert(Map<String, dynamic> alert) {
+    if (!mounted) return;
+    setState(() {
+      _refreshTick++;
+      _selectedIndex = 0;
+    });
+    final rawDescription = alert['description'];
+    final description =
+        rawDescription is String && rawDescription.isNotEmpty
+            ? rawDescription
+            : 'Тревога на площадке';
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: Theme.of(context).colorScheme.error,
+        duration: const Duration(seconds: 6),
+        content: Text(
+          '⚠️ $description',
+          style: TextStyle(color: Theme.of(context).colorScheme.onError),
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -64,9 +110,18 @@ class _OperatorShellState extends State<OperatorShell> {
       ),
       body: SafeArea(
         child: switch (_selectedIndex) {
-          0 => MonitoringScreen(repository: widget.repository),
-          1 => IncidentsScreen(repository: widget.repository),
-          _ => VisitorsScreen(repository: widget.repository),
+          0 => MonitoringScreen(
+              key: ValueKey('monitoring-$_refreshTick'),
+              repository: widget.repository,
+            ),
+          1 => IncidentsScreen(
+              key: ValueKey('incidents-$_refreshTick'),
+              repository: widget.repository,
+            ),
+          _ => VisitorsScreen(
+              key: ValueKey('visitors-$_refreshTick'),
+              repository: widget.repository,
+            ),
         },
       ),
       bottomNavigationBar: NavigationBar(

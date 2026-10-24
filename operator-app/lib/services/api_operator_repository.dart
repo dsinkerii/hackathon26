@@ -4,9 +4,10 @@ import 'package:http/http.dart' as http;
 
 import '../models/incident.dart';
 import '../models/visitor.dart';
+import 'alert_stream_service.dart';
 import 'operator_repository.dart';
 
-class ApiOperatorRepository implements OperatorRepository {
+class ApiOperatorRepository implements OperatorRepository, AlertStreamSource {
   ApiOperatorRepository({
     required Uri baseUri,
     http.Client? client,
@@ -31,6 +32,11 @@ class ApiOperatorRepository implements OperatorRepository {
 
   final Uri _baseUri;
   final http.Client _client;
+
+  @override
+  Uri alertsStreamUri() {
+    return _baseUri.resolve('/api/v1/alerts/stream');
+  }
 
   @override
   Future<List<Incident>> fetchIncidents() async {

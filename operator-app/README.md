@@ -29,10 +29,15 @@ The app expects these endpoints on `API_BASE_URL`:
   A visitor with status `PENDING` or `НА_РАССМОТРЕНИИ` can be confirmed.
 - `POST /api/v1/persons/{id}/confirm` — confirms a pending visitor. A 2xx
   response indicates success.
+- `GET /api/v1/alerts/stream` — optional live feed (Server-Sent Events). Every
+  newly created incident arrives as an `alert` event with the same JSON shape
+  as a single item of `GET /api/v1/incidents`. On an alert the client refreshes
+  the journals immediately and shows a banner. When the stream is unavailable
+  the client silently falls back to manual refresh (`pull-to-refresh`).
 
 The monitor, incident list, and visitor list can be refreshed with pull-to-refresh.
-The client currently uses REST polling on demand; live STOMP alerts and MJPEG
-video playback require the corresponding backend services and are not wired yet.
+Journals also refill automatically on each pushed SSE alert. Live MJPEG video
+playback is not wired yet.
 
 The video archive currently has one clearly labeled playback test fixture. Its
 flower clip is served by [MDN's CC0 video example](https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4)
