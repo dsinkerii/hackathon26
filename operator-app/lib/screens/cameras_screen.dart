@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/camera.dart';
 import '../services/admin_repository.dart';
+import '../widgets/adaptivity.dart';
 
 class CamerasScreen extends StatefulWidget {
   const CamerasScreen({
@@ -154,13 +155,14 @@ class _CamerasScreenState extends State<CamerasScreen> {
                   ),
                 );
               }
+              final cameraCardWidth = adaptiveWidth(context, 360);
               return Wrap(
                 spacing: 12,
                 runSpacing: 12,
                 children: [
                   for (final camera in cameras)
                     SizedBox(
-                      width: 360,
+                      width: cameraCardWidth,
                       child: Card(
                         child: Padding(
                           padding: const EdgeInsets.all(14),
@@ -289,7 +291,7 @@ class _CameraEditorState extends State<_CameraEditor> {
         content: Form(
           key: _formKey,
           child: SizedBox(
-            width: 440,
+            width: adaptiveWidth(context, 440),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/admin_account.dart';
 import '../services/admin_repository.dart';
+import '../widgets/adaptivity.dart';
 
 class AdminAccountsScreen extends StatefulWidget {
   const AdminAccountsScreen({
@@ -210,7 +211,7 @@ class _NewAccountDialogState extends State<_NewAccountDialog> {
         content: Form(
           key: _formKey,
           child: SizedBox(
-            width: 420,
+            width: adaptiveWidth(context, 420),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [

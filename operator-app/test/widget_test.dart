@@ -138,6 +138,34 @@ void main() {
     expect(find.text('Логин'), findsNothing);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('phone layout uses bottom navigation and compact dialogs',
+      (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(SafePlaygroundApp(repository: _FakeRepository()));
+    await tester.pumpAndSettle();
+
+    expect(find.text('РАЗДЕЛЫ'), findsNothing);
+    expect(find.byTooltip('Профиль'), findsOneWidget);
+    expect(find.byTooltip('Уведомления'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Профиль'));
+    await tester.pumpAndSettle();
+    expect(find.text('Профиль'), findsOneWidget);
+    expect(find.text('Логин'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.tap(find.text('Закрыть'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Уведомления'));
+    await tester.pumpAndSettle();
+    expect(find.text('VEHICLE_IN_ZONE').last, findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }
 
 class _FakeRepository implements OperatorRepository, AdminRepository {

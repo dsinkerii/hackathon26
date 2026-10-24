@@ -4,6 +4,7 @@ import 'package:video_player/video_player.dart';
 import '../models/camera.dart';
 import '../models/video_recording.dart';
 import '../services/admin_repository.dart';
+import '../widgets/adaptivity.dart';
 
 class RecordingsScreen extends StatefulWidget {
   const RecordingsScreen({
@@ -496,7 +497,7 @@ class _RecordingEditorState extends State<_RecordingEditor> {
         content: Form(
           key: _formKey,
           child: SizedBox(
-            width: 480,
+            width: adaptiveWidth(context, 480),
             child: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -636,7 +637,7 @@ class _RecordingPlayerState extends State<_RecordingPlayer> {
   Widget build(BuildContext context) => AlertDialog(
         title: Text(widget.recording.title),
         content: SizedBox(
-          width: 720,
+          width: adaptiveWidth(context, 720),
           child: FutureBuilder<void>(
             future: _initialized,
             builder: (context, snapshot) {

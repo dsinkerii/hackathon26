@@ -14,6 +14,7 @@ import 'services/admin_repository.dart';
 import 'services/auth_service.dart';
 import 'services/api_operator_repository.dart';
 import 'services/operator_repository.dart';
+import 'widgets/adaptivity.dart';
 
 void main() {
   runApp(const SafePlaygroundApp());
@@ -329,6 +330,9 @@ class _OperatorShellState extends State<OperatorShell> {
       );
     }
 
+    final narrow = MediaQuery.sizeOf(context).width < 760;
+    final showSessionPill = MediaQuery.sizeOf(context).width >= 600;
+
     return Scaffold(
       appBar: AppBar(
         title: const Row(
@@ -346,11 +350,14 @@ class _OperatorShellState extends State<OperatorShell> {
               ),
             ),
             SizedBox(width: 12),
-            Text('Безопасная площадка'),
+            Flexible(
+              child: Text('Безопасная площадка',
+                  maxLines: 1, overflow: TextOverflow.ellipsis),
+            ),
           ],
         ),
         actions: [
-          if (widget.session != null)
+          if (showSessionPill && widget.session != null)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8),
               child: Center(
@@ -390,6 +397,11 @@ class _OperatorShellState extends State<OperatorShell> {
               ),
             ),
           IconButton(
+            tooltip: 'Профиль',
+            onPressed: () => _showProfile(context),
+            icon: const Icon(Icons.person_outline),
+          ),
+          IconButton(
             tooltip: 'Уведомления',
             onPressed: () => _showNotifications(context),
             icon: const Icon(Icons.notifications_outlined),
@@ -407,6 +419,9 @@ class _OperatorShellState extends State<OperatorShell> {
       bottomNavigationBar: NavigationBar(
         selectedIndex: _selectedIndex,
         onDestinationSelected: _selectTab,
+        labelBehavior: narrow
+            ? NavigationDestinationLabelBehavior.alwaysHide
+            : NavigationDestinationLabelBehavior.alwaysShow,
         destinations: destinations,
       ),
     );
@@ -421,7 +436,7 @@ class _OperatorShellState extends State<OperatorShell> {
       builder: (context) => AlertDialog(
         title: const Text('Уведомления'),
         content: SizedBox(
-          width: 420,
+          width: adaptiveWidth(context, 420),
           child: FutureBuilder<List<Incident>>(
             future: incidents,
             builder: (context, snapshot) {
@@ -471,6 +486,19 @@ class _OperatorShellState extends State<OperatorShell> {
             child: const Text('Закрыть'),
           ),
         ],
+      ),
+    );
+  }
+  Future<void> _showProfile(BuildContext context) async {
+    final adminRepository = widget.repository is AdminRepository
+        ? widget.repository as AdminRepository
+        : null;
+    await showDialog<void>(
+      context: context,
+      builder: (_) => _ProfileDialog(
+        session: widget.session,
+        repository: adminRepository,
+        onLogout: widget.onLogout,
       ),
     );
   }
@@ -961,7 +989,7 @@ class _ProfileDialogState extends State<_ProfileDialog> {
     return AlertDialog(
       title: const Text('Профиль'),
       content: SizedBox(
-        width: 400,
+        width: adaptiveWidth(context, 400),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
