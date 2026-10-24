@@ -1,0 +1,7 @@
+# Core: enough to run the simulator mode (config parsing only).
+pyyaml>=6.0
+
+# Real video pipeline (modes `video` / `camera`) — install separately to keep
+# simulator-only environments light, e.g. `pip install -r requirements-cv.txt`:
+# ultralytics>=8.2
+# opencv-python>=4.9

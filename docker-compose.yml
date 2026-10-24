@@ -1,0 +1,42 @@
+# ============================================================
+# PostgreSQL для профиля postgres (backend: spring.profiles.active=postgres)
+#
+# ЗАПУСК:      docker compose up -d
+# СТАТУС:      docker compose ps
+# ЛОГИ:        docker compose logs -f postgres
+# ОСТАНОВИТЬ:  docker compose down        (данные остаются в volume)
+# СНЕСТИ ВСЁ:  docker compose down -v      (удалит данные БД)
+#
+# 1) Подними БД этой командой
+# 2) Запусти backend с профилем postgres:
+#    - IntelliJ: Run Configuration -> Active profiles: postgres
+#    - или CLI:  mvn spring-boot:run -Dspring-boot.run.profiles=postgres
+# 3) Flyway сам применит V1__init.sql при первом старте backend
+# 4) Проверка таблиц:
+#    docker exec -it playground-postgres psql -U playground -d playground -c "\dt"
+#
+# Если порт 5432 занят локальным Postgres — смени маппинг на "5433:5432"
+# и URL в application.yml на jdbc:postgresql://localhost:5433/playground
+# ============================================================
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: playground-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: playground
+      POSTGRES_USER: playground
+      POSTGRES_PASSWORD: playground
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U playground -d playground"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pgdata:
