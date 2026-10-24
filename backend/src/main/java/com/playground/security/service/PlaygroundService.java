@@ -2,6 +2,7 @@ package com.playground.security.service;
 
 import com.playground.security.common.ApiException;
 import com.playground.security.config.AppProperties;
+import com.playground.security.dto.IncidentResponse;
 import com.playground.security.dto.IngestRequest;
 import com.playground.security.entity.Incident;
 import com.playground.security.entity.Person;
@@ -25,16 +26,19 @@ public class PlaygroundService {
     private final IncidentRepository incidentRepository;
     private final PersonRepository personRepository;
     private final MediaStorageService mediaStorage;
+    private final AlertBroadcaster alertBroadcaster;
     private final AppProperties properties;
 
     public PlaygroundService(
             IncidentRepository incidentRepository,
             PersonRepository personRepository,
             MediaStorageService mediaStorage,
+            AlertBroadcaster alertBroadcaster,
             AppProperties properties) {
         this.incidentRepository = incidentRepository;
         this.personRepository = personRepository;
         this.mediaStorage = mediaStorage;
+        this.alertBroadcaster = alertBroadcaster;
         this.properties = properties;
     }
 
@@ -96,7 +100,9 @@ public class PlaygroundService {
                 trackId,
                 request.confidence(),
                 person);
-        return new IngestResult(incidentRepository.save(incident), true);
+        Incident saved = incidentRepository.save(incident);
+        alertBroadcaster.broadcast(IncidentResponse.from(saved));
+        return new IngestResult(saved, true);
     }
 
     @Transactional

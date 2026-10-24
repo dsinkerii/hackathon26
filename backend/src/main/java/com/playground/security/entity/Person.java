@@ -60,6 +60,10 @@ public class Person {
         }
     }
 
+    public void setDisplayName(String displayName) {
+        this.displayName = displayName;
+    }
+
     public void confirm() {
         status = PersonStatus.TRUSTED;
     }

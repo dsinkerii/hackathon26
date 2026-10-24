@@ -33,6 +33,8 @@ app:
     directory: ${MEDIA_DIRECTORY:./data/media}
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}
+  demo:
+    enabled: ${DEMO_MODE:false}
 
 ---
 spring:
