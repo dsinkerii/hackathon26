@@ -3,9 +3,22 @@ import time
 import cv2
 from ultralytics import YOLO
 
+#variables(or smth)
+webcam_n = int(input("Enter the number of webcam number for testing(-1 = in-code URL): "))
+# can use several webcams for test, so have to switch between
+
+url = None # <-------------- Dsinkerii put your API stuff here pls pls pls pls
+
+if webcam_n == -1:
+    source = url
+else:
+    source = webcam_n
+
 #functions
+
+
 def capture_image():
-    cap = cv2.VideoCapture(webcam_n) # well, camera capture
+    cap = cv2.VideoCapture(source) # well, camera capture
     ret, frame = cap.read() # returns a single frame
 
     l_tm = time.localtime()
@@ -18,12 +31,10 @@ def capture_image():
 
 
 #main code
-webcam_n = int(input("Enter the number of webcam number: ")) # can use several webcams for test, so have to switch between
-
-model = YOLO('yolo26n.pt')
+model = YOLO('yolo26n.pt') # initialises model
 print(model.names) # prints dictionary
 
-results = model(webcam_n, stream=True, show=True, stream_buffer=False) # checks for dangerous objects
+results = model(source, stream=True, show=True, stream_buffer=False) # checks for dangerous objects
 #test camera: 'http://109.206.96.58:8080/cam_1.cgi'
 
 for result in results:
@@ -33,4 +44,3 @@ for result in results:
             print("CHILD SAFETY ALERT or smth idk they don't pay me")
             capture_image()
             time.sleep(5)
-    pass
