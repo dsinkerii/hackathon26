@@ -58,11 +58,23 @@ public class RecordingController {
             throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_DATE_RANGE",
                     "'from' must be earlier than 'to'.");
         }
+        // Administrators see the whole catalog by default, including
+        // recordings that are not bound to a camera (the editor creates
+        // those when publishing a link). Regular operators only see
+        // camera-bound recordings; the no-camera category stays hidden.
+        boolean includeWithoutCamera = admin && !Boolean.TRUE.equals(withoutCamera);
         return recordings.findAll(
                         RecordingRepository.byFilters(
-                                cameraId, withoutCamera, from, to),
+                                cameraId, withoutCamera, includeWithoutCamera, from, to),
                         Sort.by(Sort.Direction.DESC, "recordedAt"))
                 .stream().map(RecordingResponse::from).toList();
+    }
+
+    @GetMapping("/{id}")
+    public RecordingResponse get(@PathVariable String id) {
+        return RecordingResponse.from(recordings.findById(id).orElseThrow(
+                () -> new ApiException(
+                        HttpStatus.NOT_FOUND, "RECORDING_NOT_FOUND", "Recording was not found.")));
     }
 
     @PostMapping

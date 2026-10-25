@@ -1,5 +1,6 @@
 package com.playground.security;
 
+import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -251,6 +252,59 @@ class OperatorApiTest {
                         .param("to", "2026-10-24T10:00:00Z"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_DATE_RANGE"));
+
+        // Recordings published via a link are not bound to a camera. The
+        // admin default list must include them instead of hiding them in
+        // the separate no-camera category.
+        String linkJson = mvc.perform(post("/api/v1/recordings")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "title":"Link event",
+                                  "recordedAt":"2026-10-24T12:00:00Z",
+                                  "videoUrl":"https://example.test/link.mp4"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.cameraId").value(nullValue()))
+                .andExpect(jsonPath("$.cameraName").value(nullValue()))
+                .andReturn().getResponse().getContentAsString();
+        String linkId = objectMapper.readTree(linkJson).get("id").asText();
+
+        mvc.perform(get("/api/v1/recordings")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2));
+
+        mvc.perform(get("/api/v1/recordings/{id}", linkId)
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.title").value("Link event"));
+
+        mvc.perform(get("/api/v1/recordings/missing-id")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("RECORDING_NOT_FOUND"));
+
+        // Operators keep the default view restricted to camera-bound
+        // recordings, and the no-camera category stays forbidden.
+        mvc.perform(post("/api/v1/users")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"username":"viewer-basic","password":"viewer-password-123","role":"OPERATOR"}
+                                """))
+                .andExpect(status().isOk());
+        String viewerToken = login("viewer-basic", "viewer-password-123");
+        mvc.perform(get("/api/v1/recordings")
+                        .header("Authorization", "Bearer " + viewerToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1));
+        mvc.perform(get("/api/v1/recordings")
+                        .header("Authorization", "Bearer " + viewerToken)
+                        .param("withoutCamera", "true"))
+                .andExpect(status().isForbidden());
     }
 
     @Test
