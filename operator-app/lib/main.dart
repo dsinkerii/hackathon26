@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
 
 import 'models/admin_account.dart';
-import 'models/incident.dart';
 import 'models/admin_session.dart';
 import 'screens/admin_accounts_screen.dart';
 import 'screens/cameras_screen.dart';
@@ -15,6 +14,7 @@ import 'screens/whitelist_screen.dart';
 import 'services/admin_repository.dart';
 import 'services/auth_service.dart';
 import 'services/api_operator_repository.dart';
+import 'services/incident_feed.dart';
 import 'services/operator_repository.dart';
 import 'theme/app_theme.dart';
 import 'widgets/account_profile_details.dart';
@@ -74,6 +74,7 @@ class _AuthGateState extends State<AuthGate> {
   late final AuthService _authService;
   late Future<AdminSession?> _restoredSession;
   AdminSession? _session;
+  ApiOperatorRepository? _repository;
 
   @override
   void initState() {
@@ -85,23 +86,38 @@ class _AuthGateState extends State<AuthGate> {
   }
 
   void _login(AdminSession session) {
-    setState(() => _session = session);
+    setState(() {
+      _session = session;
+      // The token provider closes over the session, so never reuse a
+      // repository created for an older login.
+      _repository = null;
+    });
   }
 
   Future<void> _logout() async {
     await _authService.logout();
-    if (mounted) setState(() => _session = null);
+    if (mounted) {
+      setState(() {
+        _session = null;
+        _repository = null;
+      });
+    }
+  }
+
+  /// Keep one repository (and therefore one live alert socket) for the whole
+  /// session instead of recreating it on every rebuild.
+  ApiOperatorRepository _repositoryFor(AdminSession session) {
+    return _repository ??= ApiOperatorRepository.fromEnvironment(
+      tokenProvider: () async => session.accessToken,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final session = _session;
     if (session != null && session.expiresAt.isAfter(DateTime.now())) {
-      final repository = ApiOperatorRepository.fromEnvironment(
-        tokenProvider: () async => session.accessToken,
-      );
       return OperatorShell(
-        repository: repository,
+        repository: _repositoryFor(session),
         session: session,
         onLogout: _logout,
       );
@@ -160,6 +176,77 @@ class OperatorShell extends StatefulWidget {
 
 class _OperatorShellState extends State<OperatorShell> {
   int _selectedIndex = 0;
+  late IncidentFeed _feed;
+  String? _lastShownAlertId;
+
+  @override
+  void initState() {
+    super.initState();
+    _createFeed();
+  }
+
+  @override
+  void didUpdateWidget(covariant OperatorShell oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.repository, widget.repository)) {
+      _feed.removeListener(_onFeedChanged);
+      _feed.dispose();
+      _createFeed();
+    }
+  }
+
+  void _createFeed() {
+    _feed = IncidentFeed(repository: widget.repository);
+    _feed.addListener(_onFeedChanged);
+    _feed.start();
+  }
+
+  void _onFeedChanged() {
+    final alert = _feed.latestAlert;
+    if (alert == null || alert.id == _lastShownAlertId) return;
+    _lastShownAlertId = alert.id;
+    if (!mounted) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            duration: const Duration(seconds: 8),
+            backgroundColor: const Color(0xFFB00020),
+            content: Row(
+              children: [
+                const Icon(Icons.warning_amber_rounded, color: Colors.white),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    alert.description ??
+                        (alert.type == 'STRANGER_DETECTED'
+                            ? 'Обнаружен незнакомый посетитель'
+                            : 'Автомобиль на детской площадке'),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                ),
+              ],
+            ),
+            action: SnackBarAction(
+              label: 'Открыть',
+              textColor: Colors.white,
+              onPressed: () => _selectTab(1),
+            ),
+          ),
+        );
+    });
+  }
+
+  @override
+  void dispose() {
+    _feed.removeListener(_onFeedChanged);
+    _feed.dispose();
+    super.dispose();
+  }
 
   /// Полный перечень вкладок нижней навигации (индекс = позиция раздела).
   List<NavigationDestination> get _destinations {
@@ -216,13 +303,15 @@ class _OperatorShellState extends State<OperatorShell> {
         ? widget.repository as AdminRepository
         : null;
     final isAdmin = widget.session?.isAdmin ?? adminRepository != null;
-    final destinations = _destinations;    final currentPage = switch (_selectedIndex) {
+    final destinations = _destinations;
+    final currentPage = switch (_selectedIndex) {
       0 => MonitoringScreen(
           repository: widget.repository,
+          feed: _feed,
           onOpenRecordings:
               adminRepository == null ? null : () => _selectTab(4),
         ),
-      1 => IncidentsScreen(repository: widget.repository),
+      1 => IncidentsScreen(repository: widget.repository, feed: _feed),
       2 => VisitorsScreen(repository: widget.repository),
       3 => WhitelistScreen(repository: widget.repository),
       4 when adminRepository != null =>
@@ -400,36 +489,34 @@ class _OperatorShellState extends State<OperatorShell> {
   void _selectTab(int index) => setState(() => _selectedIndex = index);
 
   Future<void> _showNotifications(BuildContext context) async {
-    final incidents = widget.repository.fetchIncidents();
     await showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Уведомления'),
         content: SizedBox(
           width: adaptiveWidth(context, 420),
-          child: FutureBuilder<List<Incident>>(
-            future: incidents,
-            builder: (context, snapshot) {
-              if (snapshot.hasError) {
+          child: AnimatedBuilder(
+            animation: _feed,
+            builder: (context, _) {
+              if (_feed.error != null && _feed.incidents.isEmpty) {
                 return Text(
-                  'Не удалось загрузить уведомления: ${snapshot.error}',
+                  'Не удалось загрузить уведомления: ${_feed.error}',
                 );
               }
-
-              if (!snapshot.hasData) {
+              if (_feed.loading && _feed.incidents.isEmpty) {
                 return const SizedBox(
                   height: 72,
                   child: Center(child: CircularProgressIndicator()),
                 );
               }
-              if (snapshot.data!.isEmpty) {
+              if (_feed.incidents.isEmpty) {
                 return const Text('Новых уведомлений нет.');
               }
               return ConstrainedBox(
                 constraints: const BoxConstraints(maxHeight: 320),
                 child: ListView(
                   shrinkWrap: true,
-                  children: snapshot.data!
+                  children: _feed.incidents
                       .take(5)
                       .map(
                         (incident) => ListTile(

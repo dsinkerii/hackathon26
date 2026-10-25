@@ -135,6 +135,8 @@ setup: change the secrets and do not expose it to the internet.
 | `INITIAL_ADMIN_USERNAME` | `playground` | created only on first start |
 | `INITIAL_ADMIN_PASSWORD` | `playground-demo` | **must be ≥ 12 characters** |
 | `DEMO_CAMERA_URL` | `http://localhost:8090/stream.mjpg` | camera entry seeded in demo mode |
+| `CV_INGEST_ENABLED` | `true` | backend consumes the CV detector longpoll |
+| `CV_SERVICE_URL` | `http://host.docker.internal:6532` in Docker | detector address; use `http://127.0.0.1:6532` for a native backend |
 
 The bootstrap account is created only when its username does not exist.
 Changing `INITIAL_ADMIN_PASSWORD` later has no effect on an existing database.
@@ -174,11 +176,21 @@ uvicorn cv_service:app --host 0.0.0.0 --port 6532
 `cv_service.py` exposes a FastAPI app (`app`) with `/health`,
 `/stream.mjpg`, and `/alerts/longpoll`. The MJPEG endpoint shows the annotated
 preview (rectangles + class names) in a browser or the Flutter app.
-`/alerts/longpoll` blocks up to 60 seconds and returns the incident JSON
-immediately when an alert is saved (`204` on timeout). `CAMERA_SOURCE`
-overrides the default source and accepts an MJPEG/RTSP URL, a video path, or a
-webcam index (`0`, `1`, ...). Detection is available through `detect()` and
-`process()` for the API to call.
+
+The backend automatically longpolls `/alerts/longpoll` and stores each event,
+including the annotated JPEG snapshot, through the normal incident ingest path.
+The API then pushes the new incident to every connected operator app over the
+`/ws/alerts` WebSocket, so the journal, activity panel, and alert banner update
+without a refresh. `/alerts/longpoll` blocks up to 60 seconds and returns the
+incident JSON immediately when an alert is saved (`204` on timeout).
+
+`CAMERA_SOURCE` overrides the default source and accepts an MJPEG/RTSP URL, a
+video path, or a webcam index (`0`, `1`, ...). Detection is available through
+`detect()` and `process()` for the API to call.
+
+When the detector runs on the host and the backend runs in Docker, the backend
+reaches it through `host.docker.internal:6532` (already configured in
+`docker-compose.yml`). Set `CV_INGEST_ENABLED=false` to run without a detector.
 
 ## Native development (optional)
 
@@ -217,6 +229,10 @@ curl http://localhost:8086/api/v1/auth/login \
 
 curl http://localhost:8090/health
 # {"ready": true, "source": "...", "fps": 26.8, "error": null}
+
+# If the detector is running, this blocks until an alert happens:
+curl http://localhost:6532/alerts/longpoll
+# { "type": "VEHICLE_IN_ZONE", ..., "snapshotBase64": "..." }
 ```
 
 The camera hub endpoints are documented in
@@ -249,6 +265,14 @@ want to open the app from a phone or another PC.
 
 **The web build is stale.** `docker compose up -d` does not rebuild images.
 Use the commands in [Rebuilding after code changes](#rebuilding-after-code-changes).
+
+**No live alerts or screenshots appear.** Check that the detector is running on
+the host (`curl http://localhost:6532/health`) and that the backend can reach it
+(`docker compose logs backend | grep -i cv`). If the detector is on another
+machine, set `CV_SERVICE_URL` in `.env`. A car or person must be detected for a
+few moments before YOLO produces an alert. Also verify that the browser can
+reach the WebSocket: open the app from the same host/port that serves it, or use
+the LAN address consistently.
 
 ## Repository layout
 

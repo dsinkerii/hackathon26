@@ -1,59 +1,65 @@
 import 'package:flutter/material.dart';
 
 import '../models/incident.dart';
-import '../services/auth_service.dart';
+import '../services/incident_feed.dart';
 import '../services/operator_repository.dart';
+import '../widgets/authenticated_image.dart';
+import '../widgets/incident_thumbnail.dart';
 
 class IncidentsScreen extends StatefulWidget {
-  const IncidentsScreen({super.key, required this.repository});
+  const IncidentsScreen({
+    super.key,
+    required this.repository,
+    required this.feed,
+  });
 
   final OperatorRepository repository;
+  final IncidentFeed feed;
 
   @override
   State<IncidentsScreen> createState() => _IncidentsScreenState();
 }
 
 class _IncidentsScreenState extends State<IncidentsScreen> {
-  late Future<List<Incident>> _incidents;
-
-  @override
-  void initState() {
-    super.initState();
-    _incidents = widget.repository.fetchIncidents();
-  }
-
-  void _refresh() {
-    setState(() {
-      _incidents = widget.repository.fetchIncidents();
-    });
-  }
+  Future<void> _refresh() => widget.feed.refresh();
 
   @override
   Widget build(BuildContext context) {
     return RefreshIndicator(
-      onRefresh: () async {
-        _refresh();
-        await _incidents;
-      },
+      onRefresh: _refresh,
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(20),
         children: [
-          Text(
-            'Журнал инцидентов',
-            style: Theme.of(context).textTheme.headlineMedium,
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Журнал инцидентов',
+                  style: Theme.of(context).textTheme.headlineMedium,
+                ),
+              ),
+              AnimatedBuilder(
+                animation: widget.feed,
+                builder: (context, _) => _LiveBadge(
+                  live: widget.feed.live,
+                  count: widget.feed.incidents.length,
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 16),
-          FutureBuilder<List<Incident>>(
-            future: _incidents,
-            builder: (context, snapshot) {
-              if (snapshot.hasError) {
+          AnimatedBuilder(
+            animation: widget.feed,
+            builder: (context, _) {
+              if (widget.feed.error != null &&
+                  widget.feed.incidents.isEmpty) {
                 return _LoadError(
-                  message: snapshot.error.toString(),
+                  message: widget.feed.error.toString(),
                   onRetry: _refresh,
                 );
               }
-              if (!snapshot.hasData) {
+              if (widget.feed.loading && widget.feed.incidents.isEmpty) {
                 return const Center(
                   child: Padding(
                     padding: EdgeInsets.all(32),
@@ -61,7 +67,7 @@ class _IncidentsScreenState extends State<IncidentsScreen> {
                   ),
                 );
               }
-              final incidents = snapshot.data!;
+              final incidents = widget.feed.incidents;
               if (incidents.isEmpty) {
                 return const _EmptyIncidents();
               }
@@ -74,6 +80,37 @@ class _IncidentsScreenState extends State<IncidentsScreen> {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _LiveBadge extends StatelessWidget {
+  const _LiveBadge({required this.live, required this.count});
+
+  final bool live;
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(
+          live ? Icons.fiber_manual_record : Icons.wifi_tethering_off_outlined,
+          size: 12,
+          color: live ? const Color(0xFFB00020) : const Color(0xFF8E8E93),
+        ),
+        const SizedBox(width: 5),
+        Text(
+          live ? 'LIVE · $count' : 'ОЖИДАНИЕ · $count',
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.4,
+            color: live ? const Color(0xFFB00020) : const Color(0xFF8E8E93),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -91,12 +128,24 @@ class _IncidentCard extends StatelessWidget {
         '${localTime.year} '
         '${localTime.hour.toString().padLeft(2, '0')}:'
         '${localTime.minute.toString().padLeft(2, '0')}';
+    final isPerson = incident.type.toUpperCase() == 'STRANGER_DETECTED';
     return Card(
       child: ListTile(
-        leading: const CircleAvatar(child: Icon(Icons.warning_amber)),
+        leading: IncidentThumbnail(url: incident.snapshotUrl, size: 58),
         title: Text(_incidentTitle(incident.type)),
         subtitle: Text('${incident.description ?? 'Инцидент'} · $date'),
         isThreeLine: incident.description != null,
+        trailing: CircleAvatar(
+          radius: 16,
+          backgroundColor: isPerson
+              ? const Color(0xFFEAF2FF)
+              : const Color(0xFFFFECEC),
+          child: Icon(
+            isPerson ? Icons.person_outline : Icons.directions_car_outlined,
+            size: 18,
+            color: isPerson ? const Color(0xFF2F6FED) : const Color(0xFFB00020),
+          ),
+        ),
         onTap: () => _showIncidentDetails(context, incident),
       ),
     );
@@ -121,16 +170,19 @@ Future<void> _showIncidentDetails(
             Text(incident.occurredAt.toLocal().toString()),
             if (incident.snapshotUrl != null) ...[
               const SizedBox(height: 16),
-              Image.network(
-                incident.snapshotUrl!,
-                headers: AuthService.activeAccessToken == null
-                    ? null
-                    : {
-                        'Authorization':
-                            'Bearer ${AuthService.activeAccessToken}',
-                      },
-                errorBuilder: (context, error, stackTrace) =>
-                    const Text('Не удалось загрузить снимок события.'),
+              SizedBox(
+                width: double.infinity,
+                height: 260,
+                child: AuthenticatedImage(
+                  url: incident.snapshotUrl!,
+                  fit: BoxFit.contain,
+                  placeholder: const Center(
+                    child: Text('Загрузка снимка события...'),
+                  ),
+                  errorWidget: const Center(
+                    child: Text('Не удалось загрузить снимок события.'),
+                  ),
+                ),
               ),
             ],
           ],
@@ -148,8 +200,9 @@ Future<void> _showIncidentDetails(
 
 String _incidentTitle(String type) {
   return switch (type.toUpperCase()) {
-    'CAR_IN_ZONE' || 'VEHICLE' || 'VEHICLE_IN_ZONE' => 'Машина в зоне',
-    'STRANGER' || 'UNKNOWN_PERSON' => 'Незнакомый посетитель',
+    'CAR_IN_ZONE' || 'VEHICLE' || 'VEHICLE_IN_ZONE' => 'Автомобиль в зоне',
+    'STRANGER' || 'UNKNOWN_PERSON' || 'STRANGER_DETECTED' =>
+      'Незнакомый посетитель',
     _ => type,
   };
 }

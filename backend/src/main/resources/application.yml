@@ -37,6 +37,11 @@ app:
     jwt-secret: ${JWT_SECRET:}
     initial-admin-username: ${INITIAL_ADMIN_USERNAME:}
     initial-admin-password: ${INITIAL_ADMIN_PASSWORD:}
+  cv:
+    enabled: ${CV_INGEST_ENABLED:true}
+    base-url: ${CV_SERVICE_URL:http://127.0.0.1:6532}
+    longpoll-timeout: ${CV_LONGPOLL_TIMEOUT:65s}
+    error-backoff: ${CV_ERROR_BACKOFF:5s}
 
 ---
 spring:

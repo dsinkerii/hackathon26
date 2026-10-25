@@ -3,6 +3,7 @@ package com.playground.security.controller;
 import com.playground.security.dto.IncidentResponse;
 import com.playground.security.dto.IngestRequest;
 import com.playground.security.dto.PersonResponse;
+import com.playground.security.service.IncidentIngestService;
 import com.playground.security.service.PlaygroundService;
 import jakarta.validation.Valid;
 import java.security.MessageDigest;
@@ -25,10 +26,15 @@ import com.playground.security.config.AppProperties;
 @RequestMapping("/api/v1")
 public class IncidentController {
     private final PlaygroundService service;
+    private final IncidentIngestService ingestService;
     private final AppProperties properties;
 
-    public IncidentController(PlaygroundService service, AppProperties properties) {
+    public IncidentController(
+            PlaygroundService service,
+            IncidentIngestService ingestService,
+            AppProperties properties) {
         this.service = service;
+        this.ingestService = ingestService;
         this.properties = properties;
     }
 
@@ -78,7 +84,7 @@ public class IncidentController {
             throw new ApiException(HttpStatus.UNAUTHORIZED,
                     "UNAUTHORIZED", "A valid ingest token is required.");
         }
-        PlaygroundService.IngestResult result = service.ingest(request);
+        PlaygroundService.IngestResult result = ingestService.ingest(request);
         return ResponseEntity.status(result.created() ? HttpStatus.CREATED : HttpStatus.OK)
                 .body(IncidentResponse.from(result.incident()));
     }

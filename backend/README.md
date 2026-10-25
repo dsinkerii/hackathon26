@@ -101,6 +101,15 @@ stack uses H2 by default so it stays a single command.
   mutate the catalog.
 - `POST /api/v1/incidents` ingests an event from the CV service. It requires
   `X-Ingest-Token`; configure it with `INGEST_API_TOKEN`.
+- `WS /ws/alerts?token=<JWT>` streams newly saved incidents to every connected
+  operator. The handshake validates the same JWT used by the REST API.
+
+The backend also consumes the CV detector longpoll automatically. It runs a
+dedicated thread against `app.cv.base-url` (default
+`http://127.0.0.1:6532`) and feeds every event through the same ingest service
+as `POST /api/v1/incidents`, including snapshot storage and WebSocket
+broadcast. Configure it with `CV_INGEST_ENABLED`, `CV_SERVICE_URL`, and
+`CV_LONGPOLL_TIMEOUT`; set `CV_INGEST_ENABLED=false` to disable the consumer.
 
 Set `JWT_SECRET` to a private string with at least 32 characters. Set
 `INITIAL_ADMIN_USERNAME` and `INITIAL_ADMIN_PASSWORD` together to bootstrap
@@ -130,6 +139,8 @@ a browser. The backend does not proxy or transcode video.
 Recording entries contain links to video files provided by an external archive
 service; the backend does not upload or own the underlying footage.
 
-Face-embedding matching, CV whitelist synchronization, STOMP alerts, and
-system-status reporting are not yet implemented. A visitor marked `TRUSTED`
-is currently only stored in the backend.
+Face-embedding matching, CV whitelist synchronization, and system-status
+reporting are not yet implemented. A visitor marked `TRUSTED` is currently only
+stored in the backend. Live incident delivery uses the raw `/ws/alerts`
+WebSocket rather than STOMP, because the Flutter client can consume it directly
+and the backend only broadcasts one message type.

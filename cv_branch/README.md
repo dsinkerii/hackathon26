@@ -86,16 +86,41 @@ uvicorn cv_service:app --host 0.0.0.0 --port 6532
 `cv_service.py` exposes a FastAPI `app` with `/health`, `/stream.mjpg`, and
 `/alerts/longpoll`. The MJPEG endpoint serves the annotated preview (rectangles
 + class names), so no OpenCV window is needed. The detection pipeline is
-available as `detect()` (yields label, confidence and frame) and `process()`
-(saves a JPEG under `alert_images/` when a `car`, `truck`, or `bus` is detected,
-at most once every 5 seconds).
+available as `detect()` and `process()`.
 
-`GET /alerts/longpoll` is for the backend. It waits up to 60 seconds and returns
-`204 No Content` if nothing happens. When an ALERT or HUMAN screenshot is saved
-it returns immediately with the ingest JSON: `type`, `occurredAt`, `trackId`,
-`confidence`, `description`, `personId`, `snapshotBase64`,
-`faceSnapshotBase64`. ALERT maps to `VEHICLE_IN_ZONE`; HUMAN maps to
-`STRANGER_DETECTED`.
+Detection uses Ultralytics tracking (`bytetrack.yaml`). A car, truck, bus, or
+person is reported once when its track appears; the same track is not reported
+again for `ALERT_TRACK_RETRIGGER` seconds (default 300). The global cooldowns
+remain as a guard against false-positive bursts (5 s for vehicles, 60 s for
+people). The saved screenshot is the annotated frame, so the operator sees the
+bounding box.
+
+`GET /alerts/longpoll` is for the backend. It waits up to 60 seconds (or the
+`?timeout=` value, capped at 60) and returns `204 No Content` if nothing
+happens. When an ALERT or HUMAN screenshot is saved it returns immediately with
+the ingest JSON:
+
+```json
+{
+  "type": "VEHICLE_IN_ZONE",
+  "occurredAt": "2026-10-25T06:30:00Z",
+  "trackId": "7",
+  "confidence": 0.91,
+  "description": null,
+  "personId": null,
+  "snapshotBase64": "...",
+  "faceSnapshotBase64": null
+}
+```
+
+ALERT maps to `VEHICLE_IN_ZONE`; HUMAN maps to `STRANGER_DETECTED` and also
+fills `faceSnapshotBase64` with the same frame so the visitors panel has a
+photo. `description` is left empty on purpose: the backend fills the localized
+default message.
+
+The queue holds the most recent `ALERT_QUEUE_SIZE` events (default 50) and
+`/health` reports `pending_alerts` and `dropped_alerts`. If no backend is
+connected, older alerts are dropped rather than growing memory forever.
 
 Only one process can open the webcam. If `camera_hub.py` is already using
 `/dev/video0`, point `CAMERA_SOURCE` at the hub URL instead of `0`.

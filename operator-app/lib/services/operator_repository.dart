@@ -7,6 +7,10 @@ abstract interface class OperatorRepository {
 
   Future<List<Incident>> fetchIncidents();
 
+  /// Live incident alerts pushed by the backend. Implementations should
+  /// reconnect automatically; the UI also reconciles with [fetchIncidents].
+  Stream<Incident> incidentAlerts();
+
   Future<List<Visitor>> fetchVisitors();
 
   Future<List<Visitor>> fetchWhitelist();

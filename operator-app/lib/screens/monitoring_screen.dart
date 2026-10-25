@@ -2,18 +2,21 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 
 import '../models/camera.dart';
-import '../models/incident.dart';
+import '../services/incident_feed.dart';
 import '../services/operator_repository.dart';
 import '../widgets/camera_view.dart';
+import '../widgets/incident_thumbnail.dart';
 
 class MonitoringScreen extends StatefulWidget {
   const MonitoringScreen({
     super.key,
     required this.repository,
+    required this.feed,
     this.onOpenRecordings,
   });
 
   final OperatorRepository repository;
+  final IncidentFeed feed;
   final VoidCallback? onOpenRecordings;
 
   @override
@@ -21,19 +24,17 @@ class MonitoringScreen extends StatefulWidget {
 }
 
 class _MonitoringScreenState extends State<MonitoringScreen> {
-  late Future<List<Incident>> _latestIncidents;
   late Future<List<Camera>> _cameras;
 
   @override
   void initState() {
     super.initState();
-    _latestIncidents = widget.repository.fetchIncidents();
     _cameras = widget.repository.fetchCameras();
   }
 
   void _refresh() {
+    widget.feed.refresh();
     setState(() {
-      _latestIncidents = widget.repository.fetchIncidents();
       _cameras = widget.repository.fetchCameras();
     });
   }
@@ -63,7 +64,7 @@ class _MonitoringScreenState extends State<MonitoringScreen> {
           onRefresh: _refresh,
         );
         final activityPanel = _ActivityPanel(
-          incidents: _latestIncidents,
+          feed: widget.feed,
           onRefresh: _refresh,
         );
 
@@ -74,7 +75,7 @@ class _MonitoringScreenState extends State<MonitoringScreen> {
             children: [
               Align(
                 alignment: Alignment.centerRight,
-                child: _ServiceStatus(incidents: _latestIncidents),
+                child: _ServiceStatus(feed: widget.feed),
               ),
               const SizedBox(height: 12),
               Expanded(
@@ -104,43 +105,67 @@ class _MonitoringScreenState extends State<MonitoringScreen> {
 }
 
 class _ServiceStatus extends StatelessWidget {
-  const _ServiceStatus({required this.incidents});
+  const _ServiceStatus({required this.feed});
 
-  final Future<List<Incident>> incidents;
+  final IncidentFeed feed;
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<List<Incident>>(
-      future: incidents,
-      builder: (context, snapshot) {
-        final connected = snapshot.hasData;
-        final failed = snapshot.hasError;
+    return AnimatedBuilder(
+      animation: feed,
+      builder: (context, _) {
+        final connected = feed.error == null && !feed.loading;
+        final failed = feed.error != null;
         final color = connected
             ? Theme.of(context).colorScheme.primary
             : failed
                 ? Theme.of(context).colorScheme.error
                 : Theme.of(context).colorScheme.secondary;
-        return Chip(
-          backgroundColor:
-              connected ? const Color(0xFFE7F7ED) : const Color(0xFFF5F5F7),
-          side: BorderSide.none,
-          avatar: Icon(
-            connected
-                ? Icons.cloud_done_outlined
-                : failed
-                    ? Icons.cloud_off_outlined
-                    : Icons.cloud_sync_outlined,
-            size: 18,
-            color: color,
-          ),
-          label: Text(
-            connected
-                ? 'Сервис подключён'
-                : failed
-                    ? 'Сервис не подключён'
-                    : 'Подключение...',
-          ),
-          visualDensity: VisualDensity.compact,
+        return Wrap(
+          alignment: WrapAlignment.end,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 8,
+          runSpacing: 4,
+          children: [
+            Chip(
+              backgroundColor:
+                  connected ? const Color(0xFFE7F7ED) : const Color(0xFFF5F5F7),
+              side: BorderSide.none,
+              avatar: Icon(
+                connected
+                    ? Icons.cloud_done_outlined
+                    : failed
+                        ? Icons.cloud_off_outlined
+                        : Icons.cloud_sync_outlined,
+                size: 18,
+                color: color,
+              ),
+              label: Text(
+                connected
+                    ? 'Сервис подключён'
+                    : failed
+                        ? 'Сервис не подключён'
+                        : 'Подключение...',
+              ),
+              visualDensity: VisualDensity.compact,
+            ),
+            if (connected)
+              Chip(
+                backgroundColor: const Color(0xFFFDECEC),
+                side: BorderSide.none,
+                avatar: Icon(
+                  feed.live
+                      ? Icons.fiber_manual_record
+                      : Icons.wifi_tethering_off_outlined,
+                  size: 14,
+                  color: feed.live
+                      ? const Color(0xFFB00020)
+                      : const Color(0xFF8E8E93),
+                ),
+                label: Text(feed.live ? 'LIVE' : 'ОЖИДАНИЕ'),
+                visualDensity: VisualDensity.compact,
+              ),
+          ],
         );
       },
     );
@@ -550,11 +575,11 @@ class _PlayerMessage extends StatelessWidget {
 
 class _ActivityPanel extends StatelessWidget {
   const _ActivityPanel({
-    required this.incidents,
+    required this.feed,
     required this.onRefresh,
   });
 
-  final Future<List<Incident>> incidents;
+  final IncidentFeed feed;
   final VoidCallback onRefresh;
 
   @override
@@ -599,23 +624,22 @@ class _ActivityPanel extends StatelessWidget {
           ),
           const Divider(height: 1),
           Expanded(
-            child: FutureBuilder<List<Incident>>(
-              future: incidents,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting &&
-                    !snapshot.hasData) {
+            child: AnimatedBuilder(
+              animation: feed,
+              builder: (context, _) {
+                if (feed.loading && feed.incidents.isEmpty) {
                   return const Center(child: CircularProgressIndicator());
                 }
-                if (snapshot.hasError) {
+                if (feed.error != null && feed.incidents.isEmpty) {
                   return Padding(
                     padding: const EdgeInsets.all(18.0),
                     child: Text(
-                      'Не удалось загрузить события: ${snapshot.error}',
+                      'Не удалось загрузить события: ${feed.error}',
                       style: const TextStyle(color: Color(0xFF6B6B6F)),
                     ),
                   );
                 }
-                final items = snapshot.data ?? const <Incident>[];
+                final items = feed.incidents;
                 if (items.isEmpty) {
                   return const Center(
                     child: Text(
@@ -631,16 +655,16 @@ class _ActivityPanel extends StatelessWidget {
                   itemBuilder: (context, index) {
                     final incident = items[index];
                     return ListTile(
-                      leading: CircleAvatar(
-                        backgroundColor: const Color(0xFFF2F2F7),
-                        child: Icon(
-                          incident.type == 'INTRUSION'
-                              ? Icons.warning_amber_rounded
-                              : Icons.person_outline,
-                          color: const Color(0xFF8E8E93),
-                        ),
+                      leading: IncidentThumbnail(
+                        url: incident.snapshotUrl,
+                        size: 46,
+                        borderRadius: 8,
                       ),
-                      title: Text(incident.description ?? incident.type),
+                      title: Text(
+                        incident.description ?? incident.type,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                       subtitle: Text(_formatDateTime(incident.occurredAt)),
                       dense: true,
                     );

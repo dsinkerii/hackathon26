@@ -26,6 +26,16 @@ public class MediaStorageService {
         if (encoded == null || encoded.isBlank()) {
             return null;
         }
+        // Accept both the raw base64 produced by cv_service.py and a data URI
+        // from browser/debug tooling.
+        if (encoded.startsWith("data:")) {
+            int comma = encoded.indexOf(',');
+            if (comma < 0) {
+                throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_IMAGE",
+                        "Image data URI is malformed.");
+            }
+            encoded = encoded.substring(comma + 1);
+        }
         final byte[] bytes;
         try {
             bytes = Base64.getDecoder().decode(encoded);

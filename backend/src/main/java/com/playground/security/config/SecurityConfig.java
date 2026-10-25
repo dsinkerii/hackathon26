@@ -126,6 +126,9 @@ public class SecurityConfig {
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers(org.springframework.http.HttpMethod.POST,
                                 "/api/v1/auth/login", "/api/v1/incidents").permitAll()
+                        // The WebSocket handshake authenticates its JWT query
+                        // parameter in AlertHandshakeInterceptor.
+                        .requestMatchers("/ws/**").permitAll()
                         .requestMatchers("/error").permitAll()
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(resourceServer -> resourceServer

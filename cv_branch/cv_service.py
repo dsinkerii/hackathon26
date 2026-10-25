@@ -28,6 +28,11 @@ HUMAN_CONF = 0.35
 HUMAN_COOLDOWN = 60.0
 HUMAN_DIR = Path(os.environ.get("ALERT_IMAGE_DIR", "alert_images"))
 
+# A track is reported once when it appears. If the same track keeps moving for
+# longer than this, it is reported again (long enough not to spam the journal).
+TRACK_RETRIGGER = float(os.environ.get("ALERT_TRACK_RETRIGGER", "300"))
+MAX_PENDING_ALERTS = int(os.environ.get("ALERT_QUEUE_SIZE", "50"))
+
 # latest annotated frame, shared by the detector and the MJPEG endpoint
 _latest_jpeg = b""
 _frame_seq = 0
@@ -35,7 +40,8 @@ _frame_cond = threading.Condition()
 
 # incidents waiting for the backend longpoll
 LONGPOLL_TIMEOUT = 60.0
-_alerts = deque()
+_alerts = deque(maxlen=MAX_PENDING_ALERTS)
+_dropped_alerts = 0
 _alert_cond = threading.Condition()
 
 _stop = threading.Event()
@@ -123,16 +129,18 @@ def capture_image(source=CAMERA_SOURCE, frame=None, capture_type='ALERT') -> Pat
             return path
 
 
-def matching_detections(result, classes=ALERT_CLASSES, conf=ALERT_CONF, capture_type='ALERT'):
+def matching_detections(result, classes=ALERT_CLASSES, conf=ALERT_CONF):
     boxes = result.boxes
     if boxes is None:
         return
     names = result.names or {}
-    for cls, score in zip(boxes.cls.tolist(), boxes.conf.tolist()):
+    ids = boxes.id
+    track_ids = ids.tolist() if ids is not None else [None] * len(boxes.cls)
+    for cls, score, track_id in zip(boxes.cls.tolist(), boxes.conf.tolist(), track_ids):
         label = names.get(int(cls))
         # makes sure it's a car and not a toy
         if label in classes and score >= conf:
-            yield label, float(score)
+            yield label, float(score), int(track_id) if track_id is not None else None
 
 
 def publish(frame) -> None:
@@ -146,41 +154,78 @@ def publish(frame) -> None:
         _frame_cond.notify_all()
 
 
-def publish_alert(capture_type, label, confidence, snapshot) -> None:
+def publish_alert(capture_type, label, confidence, snapshot, track_id=None) -> None:
+    global _dropped_alerts
     incident_type = 'STRANGER_DETECTED' if capture_type == 'HUMAN' else 'VEHICLE_IN_ZONE'
+    try:
+        encoded = base64.b64encode(Path(snapshot).read_bytes()).decode("ascii")
+    except OSError as exc:
+        print(f"[cv] could not read snapshot {snapshot}: {exc}", flush=True)
+        return
+
     payload = {
         "type": incident_type,
         "occurredAt": datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
-        "trackId": None,
+        "trackId": str(track_id) if track_id is not None else None,
         "confidence": round(confidence, 3),
-        "description": f"Detected {label} ({capture_type})",
+        # Leave description empty: the backend fills the localized default.
+        "description": None,
         "personId": None,
-        "faceSnapshotBase64": None,
+        "snapshotBase64": encoded,
+        # The backend saves this as the visitor's photo. There is no face crop
+        # yet, so the annotated frame is the best available image.
+        "faceSnapshotBase64": encoded if capture_type == 'HUMAN' else None,
     }
     with _alert_cond:
+        if len(_alerts) >= MAX_PENDING_ALERTS:
+            _dropped_alerts += 1
         _alerts.append(payload)
         _alert_cond.notify_all()
+    print(
+        f"[cv] queued {incident_type} label={label} track={track_id} "
+        f"conf={confidence:.2f} bytes={len(encoded)} queue={len(_alerts)}",
+        flush=True,
+    )
 
 
 def detect(source=CAMERA_SOURCE):
-    # checks for dangerous objects
-    #test camera: 'http://109.206.96.58:8080/cam_1.cgi'
-    results = get_model().predict(
-        source=normalize_source(source),
-        stream=True,
-        show=False,
-        stream_buffer=False,
-    )
+    # checks for dangerous objects and tracks them so one car/person is not
+    # reported on every frame. ByteTrack keeps stable IDs across frames.
+    model = get_model()
+    try:
+        results = model.track(
+            source=normalize_source(source),
+            stream=True,
+            persist=True,
+            tracker="bytetrack.yaml",
+            show=False,
+            stream_buffer=False,
+            verbose=False,
+        )
+    except Exception as exc:
+        # Older Ultralytics builds may not expose track(); prediction still
+        # works, it just loses stable IDs (and therefore per-track dedupe).
+        print(f"[cv] tracking unavailable ({exc}); falling back to predict", flush=True)
+        results = model.predict(
+            source=normalize_source(source),
+            stream=True,
+            show=False,
+            stream_buffer=False,
+            verbose=False,
+        )
     try:
         for result in results:
             if _stop.is_set():
                 break
-            publish(result.plot()) # rectangles + class names
-            for label, confidence in matching_detections(result, ALERT_CLASSES, ALERT_CONF, 'ALERT'):
-                yield label, confidence, result.orig_img
+            annotated = result.plot()  # rectangles + class names
+            publish(annotated)
+            for label, confidence, track_id in matching_detections(
+                    result, ALERT_CLASSES, ALERT_CONF):
+                yield label, confidence, annotated, track_id, 'ALERT'
             # same for humans, detect humans
-            for label, confidence in matching_detections(result, HUMAN_CLASSES, HUMAN_CONF, 'HUMAN'):
-                yield label, confidence, result.orig_img
+            for label, confidence, track_id in matching_detections(
+                    result, HUMAN_CLASSES, HUMAN_CONF):
+                yield label, confidence, annotated, track_id, 'HUMAN'
     finally:
         close = getattr(results, "close", None)
         if callable(close):
@@ -190,35 +235,71 @@ def detect(source=CAMERA_SOURCE):
 def process(source=CAMERA_SOURCE, conf=ALERT_CONF, classes=ALERT_CLASSES):
     last_alert = 0.0
     last_human = 0.0
-    for label, confidence, frame in detect(source):
-        if _stop.is_set():
-            break
-        now = time.monotonic()
-        if label in HUMAN_CLASSES:
-            if now - last_human < HUMAN_COOLDOWN:
-                continue
-            last_human = now
-            capture_type = 'HUMAN'
-        else:
-            if now - last_alert < ALERT_COOLDOWN:
-                continue
-            last_alert = now
-            capture_type = 'ALERT'
-        snapshot = capture_image(frame=frame, capture_type=capture_type)
-        if snapshot is not None and snapshot.exists():
-            publish_alert(capture_type, label, confidence, snapshot)
-        print("CHILD SAFETY ALERT or smth idk they don't pay me")
-        print(f"[cv] {label} ({confidence:.2f}) -> {snapshot}")
+    last_track: dict[str, float] = {}
+
+    while not _stop.is_set():
+        try:
+            for label, confidence, frame, track_id, capture_type in detect(source):
+                if _stop.is_set():
+                    break
+                now = time.monotonic()
+                is_human = capture_type == 'HUMAN'
+                if is_human:
+                    if now - last_human < HUMAN_COOLDOWN:
+                        continue
+                elif now - last_alert < ALERT_COOLDOWN:
+                    continue
+
+                # Per-track gate: report a given object once, not every frame.
+                track_key = f"{capture_type}:{track_id}" if track_id is not None else None
+                if track_key is not None:
+                    previous = last_track.get(track_key, 0.0)
+                    if now - previous < TRACK_RETRIGGER:
+                        continue
+
+                if is_human:
+                    last_human = now
+                else:
+                    last_alert = now
+
+                snapshot = capture_image(frame=frame, capture_type=capture_type)
+                if snapshot is not None and snapshot.exists():
+                    publish_alert(capture_type, label, confidence, snapshot, track_id)
+                    if track_key is not None:
+                        last_track[track_key] = now
+                    # Keep the dictionary bounded on long-running deployments.
+                    if len(last_track) > 500:
+                        cutoff = now - TRACK_RETRIGGER
+                        last_track = {
+                            key: seen for key, seen in last_track.items() if seen >= cutoff
+                        }
+                print(f"[cv] {label} ({confidence:.2f}) track={track_id} -> {snapshot}",
+                      flush=True)
+        except Exception as exc:
+            if _stop.is_set():
+                break
+            print(f"[cv] detection loop failed: {exc}; retrying in 3s", flush=True)
+            time.sleep(3.0)
 
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "model": MODEL_PATH, "source": str(CAMERA_SOURCE)}
+    return {
+        "status": "ok",
+        "model": MODEL_PATH,
+        "source": str(CAMERA_SOURCE),
+        "model_loaded": _model is not None,
+        "pending_alerts": len(_alerts),
+        "dropped_alerts": _dropped_alerts,
+    }
 
 
 @app.get("/alerts/longpoll")
-def longpoll():
-    deadline = time.monotonic() + LONGPOLL_TIMEOUT
+def longpoll(timeout: float = LONGPOLL_TIMEOUT):
+    # The backend asks for slightly more than the service-side default. Cap it
+    # so a client cannot hold a worker forever.
+    wait_seconds = max(0.0, min(float(timeout), LONGPOLL_TIMEOUT))
+    deadline = time.monotonic() + wait_seconds
     with _alert_cond:
         while not _alerts and not _stop.is_set():
             remaining = deadline - time.monotonic()

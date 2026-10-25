@@ -54,7 +54,7 @@ void main() {
     await tester.tap(find.text('Инциденты'));
     await tester.pumpAndSettle();
     expect(find.text('Журнал инцидентов'), findsOneWidget);
-    expect(find.text('Машина в зоне'), findsOneWidget);
+    expect(find.text('Автомобиль в зоне'), findsOneWidget);
 
     await tester.tap(find.text('Посетители'));
     await tester.pumpAndSettle();
@@ -470,6 +470,9 @@ class _FakeRepository implements OperatorRepository, AdminRepository {
           description: 'Автомобиль обнаружен',
         ),
       ];
+
+  @override
+  Stream<Incident> incidentAlerts() => const Stream.empty();
 
   @override
   Future<List<Visitor>> fetchVisitors() async => [

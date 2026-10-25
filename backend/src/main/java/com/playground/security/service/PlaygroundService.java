@@ -75,6 +75,14 @@ public class PlaygroundService {
             if (duplicate.isPresent()) {
                 return new IngestResult(duplicate.get(), false);
             }
+        } else {
+            // Untracked CV event (e.g. a transient tracking failure). Without
+            // this fallback the 5-second CV cooldown would flood the journal.
+            var duplicate = incidentRepository
+                    .findFirstByTypeAndOccurredAtAfterOrderByOccurredAtDesc(type, duplicateSince);
+            if (duplicate.isPresent()) {
+                return new IngestResult(duplicate.get(), false);
+            }
         }
 
         String snapshotUrl = mediaStorage.saveJpeg(request.snapshotBase64(), "snapshots");

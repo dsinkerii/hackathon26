@@ -21,6 +21,8 @@ import org.springframework.test.web.servlet.MockMvc;
         "app.security.jwt-secret=test-jwt-signing-secret-that-is-at-least-32-characters-long",
         "app.security.initial-admin-username=test-admin",
         "app.security.initial-admin-password=test-admin-password-123",
+        "app.cv.enabled=false",
+        "app.media.directory=target/test-media",
         "spring.datasource.url=jdbc:h2:mem:playground-test;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE"
 })
 @AutoConfigureMockMvc
@@ -60,6 +62,38 @@ class OperatorApiTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].status").value("PENDING"))
                 .andExpect(jsonPath("$[0].visitCount").value(1));
+    }
+
+    @Test
+    void ingestStoresSnapshotAndExposesItThroughMediaUrl() throws Exception {
+        String adminToken = login("test-admin", "test-admin-password-123");
+        // Minimal JPEG magic bytes are enough for the storage validator; the
+        // CV service sends a real frame in production.
+        String body = """
+                {
+                  "type": "VEHICLE_IN_ZONE",
+                  "occurredAt": "2026-10-24T10:00:00Z",
+                  "trackId": "vehicle-1",
+                  "snapshotBase64": "/9j/4AAQ"
+                }
+                """;
+        String response = mvc.perform(post("/api/v1/incidents")
+                        .header("X-Ingest-Token", "test-ingest-token")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.snapshotUrl").value(
+                        org.hamcrest.Matchers.startsWith("/media/snapshots/")))
+                .andReturn().getResponse().getContentAsString();
+
+        String snapshotUrl = objectMapper.readTree(response).get("snapshotUrl").asText();
+        java.nio.file.Path stored = java.nio.file.Path.of("target/test-media")
+                .resolve(snapshotUrl.substring("/media/".length()));
+        org.junit.jupiter.api.Assertions.assertTrue(
+                java.nio.file.Files.exists(stored), "snapshot was not written: " + stored);
+
+        mvc.perform(get(snapshotUrl).header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk());
     }
 
     @Test

@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
+import 'package:web_socket_channel/web_socket_channel.dart';
 
 import '../models/admin_account.dart';
 import '../models/camera.dart';
@@ -62,6 +63,65 @@ class ApiOperatorRepository implements OperatorRepository, AdminRepository {
         ...item,
         'snapshotUrl': _resolveMediaUrl(item['snapshotUrl']),
       }),
+    );
+  }
+
+  @override
+  Stream<Incident> incidentAlerts() async* {
+    if (_tokenProvider == null) {
+      // Without a token provider this repository is only used by tests or
+      // read-only callers; polling via fetchIncidents remains available.
+      return;
+    }
+    var reconnectDelay = const Duration(seconds: 2);
+    while (true) {
+      final token = await _tokenProvider();
+      if (token == null || token.isEmpty) {
+        await Future<void>.delayed(reconnectDelay);
+        continue;
+      }
+
+      WebSocketChannel? channel;
+      try {
+        channel = WebSocketChannel.connect(_alertWebSocketUri(token));
+        await channel.ready;
+        reconnectDelay = const Duration(seconds: 2);
+        await for (final message in channel.stream) {
+          if (message is! String) continue;
+          try {
+            final decoded = jsonDecode(message);
+            if (decoded is! Map<String, dynamic>) continue;
+            yield Incident.fromJson({
+              ...decoded,
+              'snapshotUrl': _resolveMediaUrl(decoded['snapshotUrl']),
+            });
+          } catch (_) {
+            // Ignore one malformed alert instead of dropping the socket.
+          }
+        }
+      } catch (_) {
+        // The backend may be restarting or the token may have expired. The
+        // feed also polls periodically, so a short gap is not fatal.
+      } finally {
+        try {
+          await channel?.sink.close();
+        } catch (_) {
+          // The remote side may already have closed the socket.
+        }
+      }
+
+      await Future<void>.delayed(reconnectDelay);
+      final nextSeconds = reconnectDelay.inSeconds * 2;
+      reconnectDelay = Duration(seconds: nextSeconds > 15 ? 15 : nextSeconds);
+    }
+  }
+
+  Uri _alertWebSocketUri(String token) {
+    final scheme = _baseUri.scheme == 'https' ? 'wss' : 'ws';
+    return _baseUri.replace(
+      scheme: scheme,
+      path: '/ws/alerts',
+      queryParameters: {'token': token},
     );
   }
 

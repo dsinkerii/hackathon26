@@ -19,6 +19,14 @@ services:
       INITIAL_ADMIN_USERNAME: ${INITIAL_ADMIN_USERNAME:-playground}
       INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD:-playground-demo}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
+      # The detector normally runs on the host because it needs the webcam.
+      # host-gateway makes that host reachable from inside this container on
+      # Linux as well as Docker Desktop.
+      CV_INGEST_ENABLED: ${CV_INGEST_ENABLED:-true}
+      CV_SERVICE_URL: ${CV_SERVICE_URL:-http://host.docker.internal:6532}
+      CV_LONGPOLL_TIMEOUT: ${CV_LONGPOLL_TIMEOUT:-65s}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       # H2 database, uploaded snapshots and face images.
       - backend-data:/app/data

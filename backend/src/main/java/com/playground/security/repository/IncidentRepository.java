@@ -14,4 +14,11 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
 
     Optional<Incident> findFirstByTrackIdAndTypeAndOccurredAtAfterOrderByOccurredAtDesc(
             String trackId, String type, OffsetDateTime occurredAt);
+
+    /**
+     * Fallback for CV events without a stable track ID: suppress a second event
+     * of the same type inside the deduplication window.
+     */
+    Optional<Incident> findFirstByTypeAndOccurredAtAfterOrderByOccurredAtDesc(
+            String type, OffsetDateTime occurredAt);
 }
