@@ -83,12 +83,19 @@ $env:CAMERA_SOURCE = "http://127.0.0.1:8090/stream.mjpg"
 uvicorn cv_service:app --host 0.0.0.0 --port 6532
 ```
 
-`cv_service.py` exposes a FastAPI `app` with `/health` and `/stream.mjpg`.
-The MJPEG endpoint serves the annotated preview (rectangles + class names), so
-no OpenCV window is needed. The detection pipeline is available as `detect()`
-(yields label, confidence and frame) and `process()` (saves a JPEG under
-`alert_images/` when a `car`, `truck`, or `bus` is detected, at most once every
-5 seconds).
+`cv_service.py` exposes a FastAPI `app` with `/health`, `/stream.mjpg`, and
+`/alerts/longpoll`. The MJPEG endpoint serves the annotated preview (rectangles
++ class names), so no OpenCV window is needed. The detection pipeline is
+available as `detect()` (yields label, confidence and frame) and `process()`
+(saves a JPEG under `alert_images/` when a `car`, `truck`, or `bus` is detected,
+at most once every 5 seconds).
+
+`GET /alerts/longpoll` is for the backend. It waits up to 60 seconds and returns
+`204 No Content` if nothing happens. When an ALERT or HUMAN screenshot is saved
+it returns immediately with the ingest JSON: `type`, `occurredAt`, `trackId`,
+`confidence`, `description`, `personId`, `snapshotBase64`,
+`faceSnapshotBase64`. ALERT maps to `VEHICLE_IN_ZONE`; HUMAN maps to
+`STRANGER_DETECTED`.
 
 Only one process can open the webcam. If `camera_hub.py` is already using
 `/dev/video0`, point `CAMERA_SOURCE` at the hub URL instead of `0`.

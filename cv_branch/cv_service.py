@@ -1,14 +1,18 @@
 #imports
 from __future__ import annotations
 
+import base64
 import os
+import signal
 import threading
 import time
+from collections import deque
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from pathlib import Path
 
 import cv2
-from fastapi import FastAPI
+from fastapi import FastAPI, Response
 from fastapi.responses import StreamingResponse
 from ultralytics import YOLO
 
@@ -29,11 +33,47 @@ _latest_jpeg = b""
 _frame_seq = 0
 _frame_cond = threading.Condition()
 
+# incidents waiting for the backend longpoll
+LONGPOLL_TIMEOUT = 60.0
+_alerts = deque()
+_alert_cond = threading.Condition()
+
+_stop = threading.Event()
+
+
+def _stop_server(signum=None, frame=None):
+    _stop.set()
+    with _frame_cond:
+        _frame_cond.notify_all()
+    with _alert_cond:
+        _alert_cond.notify_all()
+
+
+def _install_stop_handler():
+    # uvicorn installs its own SIGINT handler before startup; wrap it so the
+    # MJPEG/longpoll loops stop before uvicorn waits for open connections.
+    if threading.current_thread() is not threading.main_thread():
+        return
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        previous = signal.getsignal(sig)
+        def handle(signum, frame, previous=previous):
+            _stop_server()
+            if callable(previous):
+                previous(signum, frame)
+        try:
+            signal.signal(sig, handle)
+        except (ValueError, OSError):
+            pass
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # one detection loop feeds both alerts and the MJPEG preview
-    threading.Thread(target=process, daemon=True).start()
+    _install_stop_handler()
+    thread = threading.Thread(target=process, daemon=True)
+    thread.start()
     yield
+    _stop_server()
+    thread.join(timeout=2.0)
 
 
 # <-------------- Dsinkerii put your API stuff here pls pls pls pls
@@ -106,6 +146,22 @@ def publish(frame) -> None:
         _frame_cond.notify_all()
 
 
+def publish_alert(capture_type, label, confidence, snapshot) -> None:
+    incident_type = 'STRANGER_DETECTED' if capture_type == 'HUMAN' else 'VEHICLE_IN_ZONE'
+    payload = {
+        "type": incident_type,
+        "occurredAt": datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
+        "trackId": None,
+        "confidence": round(confidence, 3),
+        "description": f"Detected {label} ({capture_type})",
+        "personId": None,
+        "faceSnapshotBase64": None,
+    }
+    with _alert_cond:
+        _alerts.append(payload)
+        _alert_cond.notify_all()
+
+
 def detect(source=CAMERA_SOURCE):
     # checks for dangerous objects
     #test camera: 'http://109.206.96.58:8080/cam_1.cgi'
@@ -117,6 +173,8 @@ def detect(source=CAMERA_SOURCE):
     )
     try:
         for result in results:
+            if _stop.is_set():
+                break
             publish(result.plot()) # rectangles + class names
             for label, confidence in matching_detections(result, ALERT_CLASSES, ALERT_CONF, 'ALERT'):
                 yield label, confidence, result.orig_img
@@ -131,12 +189,24 @@ def detect(source=CAMERA_SOURCE):
 
 def process(source=CAMERA_SOURCE, conf=ALERT_CONF, classes=ALERT_CLASSES):
     last_alert = 0.0
+    last_human = 0.0
     for label, confidence, frame in detect(source):
+        if _stop.is_set():
+            break
         now = time.monotonic()
-        if now - last_alert < ALERT_COOLDOWN:
-            continue
-        last_alert = now
-        snapshot = capture_image(frame=frame)
+        if label in HUMAN_CLASSES:
+            if now - last_human < HUMAN_COOLDOWN:
+                continue
+            last_human = now
+            capture_type = 'HUMAN'
+        else:
+            if now - last_alert < ALERT_COOLDOWN:
+                continue
+            last_alert = now
+            capture_type = 'ALERT'
+        snapshot = capture_image(frame=frame, capture_type=capture_type)
+        if snapshot is not None and snapshot.exists():
+            publish_alert(capture_type, label, confidence, snapshot)
         print("CHILD SAFETY ALERT or smth idk they don't pay me")
         print(f"[cv] {label} ({confidence:.2f}) -> {snapshot}")
 
@@ -146,14 +216,30 @@ def health():
     return {"status": "ok", "model": MODEL_PATH, "source": str(CAMERA_SOURCE)}
 
 
+@app.get("/alerts/longpoll")
+def longpoll():
+    deadline = time.monotonic() + LONGPOLL_TIMEOUT
+    with _alert_cond:
+        while not _alerts and not _stop.is_set():
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            _alert_cond.wait(remaining)
+        if _alerts:
+            return _alerts.popleft()
+    return Response(status_code=204)
+
+
 @app.get("/stream.mjpg")
 def stream():
     def frames():
         last = -1
-        while True:
+        while not _stop.is_set():
             with _frame_cond:
-                _frame_cond.wait_for(lambda: _frame_seq != last, timeout=2.0)
+                _frame_cond.wait_for(lambda: _frame_seq != last or _stop.is_set(), timeout=2.0)
                 jpeg, last = _latest_jpeg, _frame_seq
+            if _stop.is_set():
+                break
             if not jpeg:
                 continue
             yield (

@@ -171,12 +171,14 @@ pip install -r requirements-cv.txt
 uvicorn cv_service:app --host 0.0.0.0 --port 6532
 ```
 
-`cv_service.py` exposes a FastAPI app (`app`) with `/health` and
-`/stream.mjpg`. The MJPEG endpoint shows the annotated preview (rectangles +
-class names) in a browser or the Flutter app. `CAMERA_SOURCE` overrides the
-default source and accepts an MJPEG/RTSP URL, a video path, or a webcam index
-(`0`, `1`, ...). Detection is available through `detect()` and `process()` for
-the API to call.
+`cv_service.py` exposes a FastAPI app (`app`) with `/health`,
+`/stream.mjpg`, and `/alerts/longpoll`. The MJPEG endpoint shows the annotated
+preview (rectangles + class names) in a browser or the Flutter app.
+`/alerts/longpoll` blocks up to 60 seconds and returns the incident JSON
+immediately when an alert is saved (`204` on timeout). `CAMERA_SOURCE`
+overrides the default source and accepts an MJPEG/RTSP URL, a video path, or a
+webcam index (`0`, `1`, ...). Detection is available through `detect()` and
+`process()` for the API to call.
 
 ## Native development (optional)
 
