@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:safe_playground_operator/main.dart';
@@ -7,10 +9,12 @@ import 'package:safe_playground_operator/models/incident.dart';
 import 'package:safe_playground_operator/models/video_recording.dart';
 import 'package:safe_playground_operator/models/visitor.dart';
 import 'package:safe_playground_operator/screens/cameras_screen.dart';
+import 'package:safe_playground_operator/screens/login_screen.dart';
 import 'package:safe_playground_operator/services/admin_repository.dart';
 import 'package:safe_playground_operator/services/operator_repository.dart';
 import 'package:safe_playground_operator/theme/app_theme.dart';
 import 'package:safe_playground_operator/widgets/mac_switch.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   // Статическое состояние темы не должно перетекать между тестами.
@@ -425,6 +429,60 @@ void main() {
 
     expect(find.text('В ЭФИРЕ'), findsOneWidget);
     expect(find.text('Уличная камера'), findsOneWidget);
+  });
+
+  testWidgets('saved session restores the dashboard after a reload',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'safe_playground_admin_session': jsonEncode({
+        'accessToken': 'restored-token',
+        'username': 'admin',
+        'role': 'ADMIN',
+        'expiresAt':
+            DateTime.now().add(const Duration(hours: 1)).toIso8601String(),
+      }),
+    });
+
+    await tester.pumpWidget(const SafePlaygroundApp());
+    // Автологин из сохранённой сессии → оболочка оператора.
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(find.textContaining('admin · '), findsOneWidget);
+    expect(find.text('Войти'), findsNothing);
+  });
+
+  testWidgets('logout clears the session and does not re-login from the cache',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'safe_playground_admin_session': jsonEncode({
+        'accessToken': 'restored-token',
+        'username': 'admin',
+        'role': 'ADMIN',
+        'expiresAt':
+            DateTime.now().add(const Duration(hours: 1)).toIso8601String(),
+      }),
+    });
+
+    await tester.pumpWidget(const SafePlaygroundApp());
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(find.textContaining('admin · '), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Выйти'));
+    // Несколько кадров: раньше сюда возвращала сессия из кэша FutureBuilder.
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(find.byType(LoginScreen), findsOneWidget);
+    expect(find.textContaining('admin · '), findsNothing);
+    expect(find.byTooltip('Выйти'), findsNothing);
+
+    // Хранилище чисто — перезагрузка страницы больше не восстановит вход.
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getString('safe_playground_admin_session'), isNull);
   });
 }
 

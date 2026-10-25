@@ -72,9 +72,15 @@ class AuthGate extends StatefulWidget {
 
 class _AuthGateState extends State<AuthGate> {
   late final AuthService _authService;
-  late Future<AdminSession?> _restoredSession;
   AdminSession? _session;
   ApiOperatorRepository? _repository;
+  bool _restoreDone = false;
+  Object? _restoreError;
+
+  /// Bumped on logout so a stale restore result cannot silently log the
+  /// user back in (that is exactly what happens if the boot restore is
+  /// applied after the session was cleared).
+  int _epoch = 0;
 
   @override
   void initState() {
@@ -82,26 +88,63 @@ class _AuthGateState extends State<AuthGate> {
     _authService = AuthService(
       baseUri: ApiOperatorRepository.baseUriFromEnvironment(),
     );
-    _restoredSession = _authService.restoreSession();
+    _restoreSession();
+  }
+
+  void _restoreSession() {
+    setState(() {
+      _restoreDone = false;
+      _restoreError = null;
+    });
+    final epoch = _epoch;
+    _authService.restoreSession().then((restored) {
+      if (!mounted || epoch != _epoch) {
+        return; // пользователь уже вышел — автологин отменён
+      }
+      setState(() {
+        _restoreDone = true;
+        if (restored != null && restored.expiresAt.isAfter(DateTime.now())) {
+          _applySession(restored);
+        }
+      });
+    }).catchError((Object error) {
+      if (!mounted || epoch != _epoch) {
+        return;
+      }
+      setState(() {
+        _restoreDone = true;
+        _restoreError = error;
+      });
+    });
+  }
+
+  void _applySession(AdminSession session) {
+    // The token provider closes over the session, so never reuse a
+    // repository created for an older login.
+    _repository = null;
+    _session = session;
   }
 
   void _login(AdminSession session) {
     setState(() {
-      _session = session;
-      // The token provider closes over the session, so never reuse a
-      // repository created for an older login.
-      _repository = null;
+      _restoreDone = true;
+      _restoreError = null;
+      _applySession(session);
     });
   }
 
   Future<void> _logout() async {
     await _authService.logout();
-    if (mounted) {
-      setState(() {
-        _session = null;
-        _repository = null;
-      });
+    if (!mounted) {
+      return;
     }
+    setState(() {
+      _epoch++;
+      _repository = null;
+      _session = null;
+      _restoreDone = true;
+      _restoreError = null;
+    });
   }
 
   /// Keep one repository (and therefore one live alert socket) for the whole
@@ -122,38 +165,21 @@ class _AuthGateState extends State<AuthGate> {
         onLogout: _logout,
       );
     }
-    return FutureBuilder<AdminSession?>(
-      future: _restoredSession,
-      builder: (context, snapshot) {
-        if (snapshot.hasError) {
-          return _StartupError(
-            message: snapshot.error.toString(),
-            onRetry: () => setState(
-              () {
-                _restoredSession = _authService.restoreSession();
-              },
-            ),
-          );
-        }
-        if (snapshot.connectionState != ConnectionState.done) {
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
-          );
-        }
-        final restored = snapshot.data;
-        if (restored != null && restored.expiresAt.isAfter(DateTime.now())) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted && _session == null) _login(restored);
-          });
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
-          );
-        }
-        return LoginScreen(
-          authService: _authService,
-          onLogin: _login,
-        );
-      },
+    if (!_restoreDone) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+    final restoreError = _restoreError;
+    if (restoreError != null) {
+      return _StartupError(
+        message: restoreError.toString(),
+        onRetry: _restoreSession,
+      );
+    }
+    return LoginScreen(
+      authService: _authService,
+      onLogin: _login,
     );
   }
 }
