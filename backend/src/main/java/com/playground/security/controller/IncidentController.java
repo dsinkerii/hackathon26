@@ -43,6 +43,13 @@ public class IncidentController {
         return service.incidents().stream().map(IncidentResponse::from).toList();
     }
 
+    /** Удаление инцидента из журнала (кнопка «удалить» рядом с записью). */
+    @DeleteMapping("/incidents/{id}")
+    public ResponseEntity<Void> deleteIncident(@PathVariable String id) {
+        service.deleteIncident(id);
+        return ResponseEntity.noContent().build();
+    }
+
     @GetMapping("/persons")
     public List<PersonResponse> persons(
             @RequestParam(name = "status", required = false) String status) {

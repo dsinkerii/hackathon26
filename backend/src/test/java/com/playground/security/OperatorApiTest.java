@@ -168,6 +168,40 @@ class OperatorApiTest {
     }
 
     @Test
+    void deletesAnIncidentFromTheJournal() throws Exception {
+        mvc.perform(delete("/api/v1/incidents/some-id"))
+                .andExpect(status().isUnauthorized());
+
+        String adminToken = login("test-admin", "test-admin-password-123");
+        String incidentJson = mvc.perform(post("/api/v1/incidents")
+                        .header("X-Ingest-Token", "test-ingest-token")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "type": "STRANGER_DETECTED",
+                                  "occurredAt": "2026-10-24T12:00:00Z",
+                                  "trackId": "delete-track-1"
+                                }
+                                """))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        String incidentId = objectMapper.readTree(incidentJson).get("id").asText();
+
+        mvc.perform(delete("/api/v1/incidents/{id}", incidentId)
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isNoContent());
+
+        mvc.perform(get("/api/v1/incidents")
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(jsonPath("$.length()").value(0));
+
+        mvc.perform(delete("/api/v1/incidents/{id}", incidentId)
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("INCIDENT_NOT_FOUND"));
+    }
+
+    @Test
     void requiresLoginForAdminApisAndAllowsAdminToManageRecordingCatalog() throws Exception {
         mvc.perform(get("/api/v1/cameras"))
                 .andExpect(status().isUnauthorized());

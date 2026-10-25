@@ -83,6 +83,19 @@ class IncidentFeed extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Удаляет инцидент на сервере и сразу убирает его из живого списка.
+  ///
+  /// Заметка в [_recentAlertIds] стирается, чтобы пришедший в пике websocket не
+  /// «воскресил» запись, которую оператор только что удалил.
+  Future<void> deleteIncident(String id) async {
+    await repository.deleteIncident(id);
+    _recentAlertIds.remove(id);
+    _incidents = List.unmodifiable(
+      _incidents.where((incident) => incident.id != id),
+    );
+    notifyListeners();
+  }
+
   /// Server data wins for shared IDs, but a just-pushed alert is never lost if
   /// a REST snapshot was taken a moment earlier.
   List<Incident> _merge(List<Incident> primary, List<Incident> secondary) {

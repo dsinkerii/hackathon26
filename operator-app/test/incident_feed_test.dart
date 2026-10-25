@@ -30,9 +30,34 @@ void main() {
     feed.dispose();
     await repository.close();
   });
+
+  test('deleteIncident removes the record from the live list', () async {
+    final repository = _FeedRepository();
+    final feed = IncidentFeed(repository: repository);
+    await feed.start();
+
+    final alert = Incident(
+      id: 'live-2',
+      type: 'CAR_IN_ZONE',
+      occurredAt: DateTime.utc(2026, 10, 25, 11),
+      description: 'Тревога! Автомобиль на детской площадке',
+    );
+    repository.push(alert);
+    await Future<void>.delayed(Duration.zero);
+    expect(feed.incidents.single.id, 'live-2');
+
+    await feed.deleteIncident('live-2');
+
+    expect(feed.incidents, isEmpty);
+    expect(repository.deleted, ['live-2']);
+
+    feed.dispose();
+    await repository.close();
+  });
 }
 
 class _FeedRepository implements OperatorRepository {
+  final deleted = <String>[];
   final _alerts = StreamController<Incident>.broadcast();
 
   void push(Incident incident) => _alerts.add(incident);
@@ -61,4 +86,7 @@ class _FeedRepository implements OperatorRepository {
 
   @override
   Future<void> removeVisitor(String id) async {}
+
+  @override
+  Future<void> deleteIncident(String id) async => deleted.add(id);
 }

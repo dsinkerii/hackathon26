@@ -22,4 +22,7 @@ abstract interface class OperatorRepository {
 
   /// Полное удаление посетителя (вместе с инцидентами) на сервере.
   Future<void> removeVisitor(String id);
+
+  /// Удаление одного инцидента из журнала.
+  Future<void> deleteIncident(String id);
 }

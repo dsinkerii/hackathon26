@@ -62,6 +62,28 @@ void main() {
     expect(find.text('Добавить в белый список'), findsOneWidget);
   });
 
+  testWidgets('incident can be deleted from the journal', (tester) async {
+    final repository = _FakeRepository();
+    await tester.pumpWidget(SafePlaygroundApp(repository: repository));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Инциденты'));
+    await tester.pumpAndSettle();
+    expect(find.text('Автомобиль в зоне'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Удалить инцидент'));
+    await tester.pumpAndSettle();
+    expect(find.text('Удалить инцидент?'), findsOneWidget);
+
+    await tester.tap(find.text('Удалить'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Автомобиль в зоне'), findsNothing);
+    expect(repository.removedIncidentIds, ['incident-1']);
+    expect(find.text('Инцидент удалён'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('visitor can be confirmed into the allow list', (tester) async {
     final repository = _FakeRepository();
     await tester.pumpWidget(SafePlaygroundApp(repository: repository));
@@ -423,6 +445,7 @@ class _FakeRepository implements OperatorRepository, AdminRepository {
   final List<String> confirmedIds = [];
   bool _confirmed = false;
   final List<String> removedVisitorIds = [];
+  final List<String> removedIncidentIds = [];
   final List<String> excludedVisitorIds = [];
   bool _visitor2Removed = false;
 
@@ -460,6 +483,10 @@ class _FakeRepository implements OperatorRepository, AdminRepository {
     removedVisitorIds.add(id);
     if (id == 'visitor-2') _visitor2Removed = true;
   }
+
+  @override
+  Future<void> deleteIncident(String id) async =>
+      removedIncidentIds.add(id);
 
   @override
   Future<List<Incident>> fetchIncidents() async => [

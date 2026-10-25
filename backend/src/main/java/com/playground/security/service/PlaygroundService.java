@@ -146,6 +146,15 @@ public class PlaygroundService {
         personRepository.delete(person);
     }
 
+    /** Удаление одного инцидента из журнала. */
+    @Transactional
+    public void deleteIncident(String id) {
+        Incident incident = incidentRepository.findById(id)
+                .orElseThrow(() -> new ApiException(
+                        HttpStatus.NOT_FOUND, "INCIDENT_NOT_FOUND", "Incident was not found."));
+        incidentRepository.delete(incident);
+    }
+
     private String defaultDescription(String type) {
         return switch (type) {
             case "CAR_ON_PLAYGROUND", "CAR_IN_ZONE", "VEHICLE_IN_ZONE", "VEHICLE" ->

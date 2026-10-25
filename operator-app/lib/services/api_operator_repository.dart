@@ -67,6 +67,12 @@ class ApiOperatorRepository implements OperatorRepository, AdminRepository {
   }
 
   @override
+  Future<void> deleteIncident(String id) => _expectSuccess(
+        _request('DELETE', '/api/v1/incidents/${Uri.encodeComponent(id)}'),
+        'Не удалось удалить инцидент',
+      );
+
+  @override
   Stream<Incident> incidentAlerts() async* {
     if (_tokenProvider == null) {
       // Without a token provider this repository is only used by tests or

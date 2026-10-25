@@ -23,6 +23,45 @@ class IncidentsScreen extends StatefulWidget {
 class _IncidentsScreenState extends State<IncidentsScreen> {
   Future<void> _refresh() => widget.feed.refresh();
 
+  Future<void> _deleteIncident(Incident incident) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Удалить инцидент?'),
+        content: Text(
+          'Запись «${_incidentTitle(incident.type)}» будет удалена '
+          'из журнала безвозвратно.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFFB00020),
+            ),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Удалить'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      await widget.feed.deleteIncident(incident.id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Инцидент удалён')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Не удалось удалить инцидент: $error')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return RefreshIndicator(
@@ -73,7 +112,10 @@ class _IncidentsScreenState extends State<IncidentsScreen> {
               }
               return Column(
                 children: incidents
-                    .map((incident) => _IncidentCard(incident: incident))
+                    .map((incident) => _IncidentCard(
+                          incident: incident,
+                          onDelete: () => _deleteIncident(incident),
+                        ))
                     .toList(),
               );
             },
@@ -116,9 +158,10 @@ class _LiveBadge extends StatelessWidget {
 }
 
 class _IncidentCard extends StatelessWidget {
-  const _IncidentCard({required this.incident});
+  const _IncidentCard({required this.incident, required this.onDelete});
 
   final Incident incident;
+  final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -135,16 +178,27 @@ class _IncidentCard extends StatelessWidget {
         title: Text(_incidentTitle(incident.type)),
         subtitle: Text('${incident.description ?? 'Инцидент'} · $date'),
         isThreeLine: incident.description != null,
-        trailing: CircleAvatar(
-          radius: 16,
-          backgroundColor: isPerson
-              ? const Color(0xFFEAF2FF)
-              : const Color(0xFFFFECEC),
-          child: Icon(
-            isPerson ? Icons.person_outline : Icons.directions_car_outlined,
-            size: 18,
-            color: isPerson ? const Color(0xFF2F6FED) : const Color(0xFFB00020),
-          ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircleAvatar(
+              radius: 16,
+              backgroundColor: isPerson
+                  ? const Color(0xFFEAF2FF)
+                  : const Color(0xFFFFECEC),
+              child: Icon(
+                isPerson ? Icons.person_outline : Icons.directions_car_outlined,
+                size: 18,
+                color: isPerson ? const Color(0xFF2F6FED) : const Color(0xFFB00020),
+              ),
+            ),
+            IconButton(
+              tooltip: 'Удалить инцидент',
+              icon: const Icon(Icons.delete_outline, size: 20),
+              color: const Color(0xFFB00020),
+              onPressed: onDelete,
+            ),
+          ],
         ),
         onTap: () => _showIncidentDetails(context, incident),
       ),

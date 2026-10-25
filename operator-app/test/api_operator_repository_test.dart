@@ -36,8 +36,25 @@ void main() {
     );
   });
 
-  test('resolves visitor photos against the backend origin', () async {
+  test('deleteIncident issues DELETE to the incidents endpoint', () async {
+    Uri? url;
+    String? method;
     final repository = ApiOperatorRepository(
+      baseUri: Uri.parse('http://localhost:8080'),
+      client: _FakeHttpClient((request) async {
+        method = request.method;
+        url = request.url;
+        return http.Response('', 204);
+      }),
+    );
+
+    await repository.deleteIncident('incident-1');
+
+    expect(method, 'DELETE');
+    expect(url!.path, '/api/v1/incidents/incident-1');
+  });
+
+  test('resolves visitor photos against the backend origin', () async {    final repository = ApiOperatorRepository(
       baseUri: Uri.parse('http://localhost:8080'),
       client: _FakeHttpClient((request) async {
         expect(request.url.path, '/api/v1/persons');
