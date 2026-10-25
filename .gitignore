@@ -187,4 +187,4 @@ app.*.symbols
 # Python
 **/.venv/
 __pycache__/
-/cv_branch/alert_images
+alert_images
