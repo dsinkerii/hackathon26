@@ -198,7 +198,7 @@ def detect(source=CAMERA_SOURCE):
             stream=True,
             persist=True,
             tracker="bytetrack.yaml",
-            show=False,
+            show=True,
             stream_buffer=False,
             verbose=False,
         )
