@@ -76,11 +76,33 @@ python cv_service.py http://127.0.0.1:8090/stream.mjpg
 ```
 
 Without a source argument it defaults to
-`http://127.0.0.1:8090/stream.mjpg`. Other flags: `--model`, `--conf`,
-`--no-show`, `--save`.
+`http://127.0.0.1:8090/stream.mjpg`. The positional source can also be a
+webcam index (`0`, `1`, ...), an RTSP/MJPEG URL, or a video file:
+
+```powershell
+python cv_service.py 0
+```
+
+When a `car`, `truck`, or `bus` is detected above `--conf`, the detector saves
+a JPEG snapshot under `alert_images/` and prints an alert. Snapshots are
+rate-limited by `--alert-cooldown` (default 5 s) so the stream is not blocked.
+
+Flags: `--model`, `--conf`, `--classes`, `--alert-dir`, `--alert-cooldown`,
+`--no-show`, `--save`. To also push alerts to the backend, point it at
+`POST /api/v1/incidents`:
+
+```powershell
+$env:INGEST_URL = "http://127.0.0.1:8086/api/v1/incidents"
+$env:INGEST_API_TOKEN = "local-ingest-token"
+python cv_service.py
+```
+
+`--incident-type` selects the type sent (default `VEHICLE_IN_ZONE`).
 
 The detector reads the same hub, so it does not compete with the UI for the
 device. `CAMERA_SOURCE=...` also works instead of the positional argument.
+Do not point `cv_service.py 0` at a webcam while `camera_hub.py` is already
+using it — a device can only be opened by one process.
 
 ## Operator app
 
