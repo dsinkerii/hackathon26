@@ -4,6 +4,7 @@ import cv2
 from ultralytics import YOLO
 
 #variables(or smth)
+
 webcam_n = input("Enter the number of webcam number for testing(URL = in-code URL): ")
 # can use several webcams for test, so have to switch between
 
@@ -39,8 +40,13 @@ results = model(source, stream=True, show=True, stream_buffer=False) # checks fo
 
 for result in results:
     class_list = result.boxes.cls.tolist()
+    conf_list = result.boxes.conf.tolist()
+    counter = 0
+
     for cl in class_list:
-        if model.names.get(cl) in ['car', 'truck', 'bus']:
+        if model.names.get(cl) in ['car', 'truck', 'bus'] and conf_list[counter] >= 0.35: # makes sure it's a car and not a toy
             print("CHILD SAFETY ALERT or smth idk they don't pay me")
             capture_image()
             time.sleep(5)
+        print("confidence: ", conf_list[counter], conf_list, "class: ", model.names.get(cl), class_list)
+        counter += 1
