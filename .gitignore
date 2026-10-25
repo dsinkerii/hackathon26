@@ -188,3 +188,8 @@ app.*.symbols
 **/.venv/
 __pycache__/
 /cv_branch/alert_images
+
+# CV is74 AI instance (runtime artifacts)
+/cv_branch/alert_images_is74/
+/cv_branch/is74-ai.pid
+/cv_branch/logs/
