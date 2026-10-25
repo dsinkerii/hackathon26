@@ -1,43 +1,67 @@
 # Safe Playground Backend
 
-Spring Boot REST backend for the Flutter operator app. Requires Java 17.
+Spring Boot REST backend for the Flutter operator app.
+
+## Docker (recommended)
+
+The normal way to run it is from the repository root:
+
+```bash
+docker compose up --build -d backend
+```
+
+It listens on <http://localhost:8086> and persists the H2 database plus
+uploaded media in the `backend-data` volume. Environment defaults, secrets,
+and the bootstrap administrator are configured in the root
+`.env.example` / [`docker-compose.yml`](../docker-compose.yml).
+
+The web container proxies `/api/` and `/media/` to this service, so the Flutter
+app does not need CORS.
 
 ## Local run
 
-From this directory:
+Requires Java 17 and Maven. From this directory:
 
-```powershell
-$env:INGEST_API_TOKEN = "replace-with-a-local-secret"
-$env:JWT_SECRET = "replace-with-a-random-secret-of-at-least-32-characters"
-$env:INITIAL_ADMIN_USERNAME = "admin"
-$env:INITIAL_ADMIN_PASSWORD = "replace-with-a-password-of-at-least-12-characters"
+```bash
+export INGEST_API_TOKEN="replace-with-a-local-secret"
+export JWT_SECRET="replace-with-a-random-secret-of-at-least-32-characters"
+export INITIAL_ADMIN_USERNAME="admin"
+export INITIAL_ADMIN_PASSWORD="replace-with-a-password-of-at-least-12-characters"
+export SERVER_PORT=8086
 mvn spring-boot:run
 ```
 
-If Java 17 and Maven are not installed locally, run Maven in a container from
-this directory instead:
+PowerShell:
 
 ```powershell
 $env:INGEST_API_TOKEN = "replace-with-a-local-secret"
 $env:JWT_SECRET = "replace-with-a-random-secret-of-at-least-32-characters"
 $env:INITIAL_ADMIN_USERNAME = "admin"
 $env:INITIAL_ADMIN_PASSWORD = "replace-with-a-password-of-at-least-12-characters"
-docker run --rm -p 8080:8080 `
-  -e "INGEST_API_TOKEN=$env:INGEST_API_TOKEN" `
-  -e "JWT_SECRET=$env:JWT_SECRET" `
-  -e "INITIAL_ADMIN_USERNAME=$env:INITIAL_ADMIN_USERNAME" `
-  -e "INITIAL_ADMIN_PASSWORD=$env:INITIAL_ADMIN_PASSWORD" `
-  -v "${PWD}:/workspace" -w /workspace `
-  maven:3.9-eclipse-temurin-17 mvn spring-boot:run
+$env:SERVER_PORT = "8086"
+mvn spring-boot:run
+```
+
+If Java 17 and Maven are not installed, build the image and run it directly:
+
+```powershell
+docker build -t safe-playground/backend .
+docker run --rm -p 8086:8086 `
+  -e "INGEST_API_TOKEN=replace-with-a-local-secret" `
+  -e "JWT_SECRET=replace-with-a-random-secret-of-at-least-32-characters" `
+  -e "INITIAL_ADMIN_USERNAME=admin" `
+  -e "INITIAL_ADMIN_PASSWORD=replace-with-a-password-of-at-least-12-characters" `
+  -v "${PWD}/data:/app/data" `
+  safe-playground/backend
 ```
 
 The default profile uses a local H2 file database at `./data/playground` and
 stores images under `./data/media`. Flyway creates the schema on first startup.
-The API listens on `http://localhost:8080`.
+The API listens on `http://localhost:8086` (override with `SERVER_PORT`).
 
 To run the tests:
 
-```powershell
+```bash
 mvn test
 ```
 
@@ -45,16 +69,19 @@ mvn test
 
 Set `POSTGRES_PASSWORD`, then start the database:
 
-```powershell
-$env:POSTGRES_PASSWORD = "replace-with-a-local-password"
+```bash
+export POSTGRES_PASSWORD="replace-with-a-local-password"
 docker compose up -d postgres
-$env:DATABASE_PASSWORD = $env:POSTGRES_PASSWORD
-$env:INGEST_API_TOKEN = "replace-with-a-local-secret"
-$env:JWT_SECRET = "replace-with-a-random-secret-of-at-least-32-characters"
-$env:INITIAL_ADMIN_USERNAME = "admin"
-$env:INITIAL_ADMIN_PASSWORD = "replace-with-a-password-of-at-least-12-characters"
-mvn spring-boot:run "-Dspring-boot.run.profiles=postgres"
+export DATABASE_PASSWORD="$POSTGRES_PASSWORD"
+export INGEST_API_TOKEN="replace-with-a-local-secret"
+export JWT_SECRET="replace-with-a-random-secret-of-at-least-32-characters"
+export INITIAL_ADMIN_USERNAME="admin"
+export INITIAL_ADMIN_PASSWORD="replace-with-a-password-of-at-least-12-characters"
+mvn spring-boot:run -Dspring-boot.run.profiles=postgres
 ```
+
+The PostgreSQL options are in this directory's `docker-compose.yml`. The root
+stack uses H2 by default so it stays a single command.
 
 ## API
 
@@ -95,11 +122,13 @@ configured with `CORS_ALLOWED_ORIGINS` (comma-separated).
 
 ## Camera and recording source
 
-The catalog stores camera details and HTTP(S) links to video files provided by
-an external camera/archive service. It does not upload, transcode, or retain
-the video itself. The player loads the supplied URL directly, so the archive
-host must allow browser playback (including CORS where applicable). Live
-streaming and physical camera integration remain separate work.
+The catalog stores camera details and the URL the client should render. For
+live MJPEG the camera hub from [`cv_branch`](../cv_branch/README.md) serves
+`http://<host>:8090/stream.mjpg`; RTSP URLs work in the desktop app but not in
+a browser. The backend does not proxy or transcode video.
+
+Recording entries contain links to video files provided by an external archive
+service; the backend does not upload or own the underlying footage.
 
 Face-embedding matching, CV whitelist synchronization, STOMP alerts, and
 system-status reporting are not yet implemented. A visitor marked `TRUSTED`

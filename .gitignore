@@ -180,3 +180,10 @@ app.*.symbols
 # FVM
 .fvm/flutter_sdk
 .fvm/versions
+
+# Local environment / secrets
+.env
+
+# Python
+**/.venv/
+__pycache__/

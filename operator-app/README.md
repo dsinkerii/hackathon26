@@ -1,64 +1,93 @@
 # Safe Playground Operator
 
-Flutter client for the playground monitoring operator.
+Flutter client for the playground monitoring operator. The supported way to
+run it is the containerised stack in the [root README](../README.md):
 
-## Run
-
-Install Flutter, then run from this directory:
-
-```powershell
-flutter pub get
-flutter run -d web-server --web-hostname 0.0.0.0 --web-port 5173 `
-  --dart-define=API_BASE_URL=http://localhost:8080
+```bash
+docker compose up --build -d
+# http://localhost:5173
 ```
 
-Open `http://localhost:5173` to use the web app. The API remains a separate
-backend service at `http://localhost:8080` by default. Override the API address
-with `--dart-define=API_BASE_URL=...` when the backend runs elsewhere. The
-default API URL is `http://localhost:8080`; Android emulator users should set
-it to `http://10.0.2.2:8080`.
+The image builds the **release** web bundle with the pinned Flutter SDK and
+serves it through nginx, so no local Flutter install is required.
 
-## Admin site and authorization
+## Configuration
 
-The web client now requires an account. Start the backend with
-`JWT_SECRET`, `INITIAL_ADMIN_USERNAME`, and `INITIAL_ADMIN_PASSWORD` set as
-described in [the backend README](../backend/README.md). The bootstrap
-administrator can create operator/admin accounts in **Доступ**; public signup
-is disabled. Sessions use expiring bearer tokens.
+At build time the app reads `API_BASE_URL`:
 
-Administrators can manage camera catalog entries, recording metadata, and
-accounts. The **Видеоархив** view filters across all cameras or one selected
-camera and by date range. Recording entries contain links to video files
-provided by an external archive service; the backend does not upload or own
-the underlying footage. Connect a camera/archive source and register its
-recording URLs before expecting real footage.
+- `/` (used by the Docker image) means "same origin as this page". nginx
+  proxies `/api/` and `/media/` to the backend, so the app works from any host
+  or LAN address without CORS.
+- An absolute URL such as `http://localhost:8086` is used as-is.
+  `String.fromEnvironment` means it is compiled in, not read at runtime:
+
+  ```bash
+  flutter run -d chrome --dart-define=API_BASE_URL=http://localhost:8086
+  ```
+
+The default for a native/dev build is `http://localhost:8086`.
+
+## Native development
+
+Install Flutter 3.38.x, then:
+
+```bash
+flutter pub get
+flutter run -d chrome --web-port 5173 \
+  --dart-define=API_BASE_URL=http://localhost:8086
+```
+
+The backend's default CORS allow-list contains `http://localhost:5173`; a
+different dev port needs to be added to `CORS_ALLOWED_ORIGINS`.
+
+The backend can run from Docker or from Maven; see
+[`backend/README.md`](../backend/README.md). Android emulator users should use
+`http://10.0.2.2:8086`.
+
+## Camera playback
+
+The app renders the camera's `streamUrl` directly:
+
+- **Web** — a plain `<img>` platform view. Browsers render
+  `multipart/x-mixed-replace` (MJPEG) natively. RTSP cannot be played by a
+  browser and is reported with a clear message.
+- **Linux/Windows/mobile** — `media_kit` (mpv), which handles MJPEG, RTSP, and
+  video files.
+
+Point a camera entry at the hub:
+
+```
+http://localhost:8090/stream.mjpg
+```
+
+`0.0.0.0` is a bind address, not a destination: Chrome rejects it for image
+subresources even though it works in the address bar. The player normalises it
+to `127.0.0.1`; prefer `localhost` when creating the camera.
+
+## Features
+
+- Login with expiring bearer tokens; no public registration.
+- Monitoring, incident journal, visitors, recordings, camera catalog, and
+  account management.
+- Administrators manage cameras, recordings, and accounts.
+- Pull-to-refresh for the monitor, incidents, and visitors.
 
 ## Backend contract
 
-The app expects these endpoints on `API_BASE_URL` and sends the login token as a
-bearer authorization header:
+The app expects these endpoints on `API_BASE_URL` and sends the login token as
+a bearer authorization header:
 
 - `POST /api/v1/auth/login`
-- `GET /api/v1/incidents` — JSON array of incidents with `id`, `type`, and ISO
-  8601 `occurredAt`; optional `description` and `snapshotUrl`.
-- `GET /api/v1/persons` — JSON array of visitors with `id`, `status`, and ISO
-  8601 `firstSeenAt`; optional `displayName`, `visitCount`, and `photoUrl`.
-  A visitor with status `PENDING` or `НА_РАССМОТРЕНИИ` can be confirmed.
-- `POST /api/v1/persons/{id}/confirm` — confirms a pending visitor. A 2xx
-  response indicates success.
-- `GET /api/v1/cameras` and `GET /api/v1/recordings?cameraId=&from=&to=`.
-- Administrator-only camera, recording, and account management endpoints.
+- `GET /api/v1/incidents`
+- `GET /api/v1/persons`, `POST /api/v1/persons/{id}/confirm`
+- `GET /api/v1/cameras`, `GET /api/v1/recordings?cameraId=&from=&to=`
+- Administrator-only camera, recording, and account endpoints.
 
-The monitor, incident list, and visitor list can be refreshed with pull-to-refresh.
-The client currently uses REST polling on demand; live STOMP alerts and MJPEG
-video playback require the corresponding backend services and are not wired yet.
-
-Live STOMP alerts and camera-stream playback still require integration with the
-CV/video services. The archive no longer substitutes a third-party sample clip
-for real recordings.
+See [`backend/README.md`](../backend/README.md) for request/response details.
 
 ## Tests
 
-```powershell
+```bash
 flutter test
+flutter analyze
 ```

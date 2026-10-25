@@ -32,6 +32,12 @@ class ApiOperatorRepository implements OperatorRepository, AdminRepository {
       'API_BASE_URL',
       defaultValue: 'http://localhost:8086',
     );
+    // `/` means "same origin as this page". The containerised web build is
+    // served by nginx, which proxies /api and /media to the backend, so the
+    // app keeps working from any host or LAN address without rebuilding.
+    if (baseUrl.isEmpty || baseUrl == '/') {
+      return Uri.base.resolve('/');
+    }
     final uri = Uri.tryParse(baseUrl);
     if (uri == null || !uri.hasAuthority || !uri.hasScheme) {
       throw ArgumentError.value(

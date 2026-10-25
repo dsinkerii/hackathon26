@@ -4,11 +4,33 @@
 
 A webcam can only be opened by **one** process, so capture lives in a single
 place: `camera_hub.py`. It grabs frames once and republishes them as MJPEG over
-HTTP for both the operator app and the detector.
+HTTP for both the operator app and the YOLO detector.
+
+### Install (host)
+
+Python 3.10+ is enough for the hub.
+
+Windows (PowerShell):
+
+```powershell
+cd cv_branch
+py -3.12 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+```
+
+Linux/macOS:
 
 ```bash
 cd cv_branch
+python3 -m venv .venv
 source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+### Run
+
+```powershell
 python camera_hub.py --source 0
 ```
 
@@ -19,42 +41,62 @@ python camera_hub.py --source 0
 | `GET /health` | JSON: `ready`, `fps`, `error` |
 | `GET /` | small HTML page that shows the stream |
 
-Options: `--source` (camera index, device path, RTSP URL or video file),
-`--width`/`--height`, `--fps`, `--quality`, `--fourcc`, `--port`, `--loop`.
+Options: `--source` (camera index, device path, RTSP URL, MJPEG URL, or video
+file), `--host`, `--port`, `--width`/`--height`, `--fps`, `--quality`,
+`--fourcc`, `--loop`.
 
 Quick check:
 
-```bash
+```powershell
 curl http://127.0.0.1:8090/health
-xdg-open http://127.0.0.1:8090/   # or open it in a browser
+start http://127.0.0.1:8090/
 ```
 
-If `/health` reports a low `fps` and the picture is black, the lens is covered
-or the privacy shutter (Logitech BRIO) is closed — the camera slows its frame
-rate in the dark to compensate.
+If `/health` reports a low `fps` and the picture is black, the lens is covered,
+the privacy shutter is closed, or the room is dark — the camera slows its frame
+rate to compensate. If the device refuses to open, try `--fourcc ""`, a
+different index (`--source 1`), or a different backend/capture tool.
+
+### Docker demo (no webcam)
+
+The root `docker-compose.yml` can run a synthetic 720p stream instead:
+
+```bash
+docker compose --profile demo up --build -d camera
+```
+
+It serves `http://localhost:8090/stream.mjpg` from a generated test pattern.
+That is what the `demo` profile uses; it is not a substitute for a real camera.
 
 ## Detector
 
-```bash
-python cv_service.py
-# or point it somewhere else:
-CAMERA_SOURCE=http://127.0.0.1:8090/stream.mjpg python cv_service.py
+```powershell
+pip install -r requirements-cv.txt
+python cv_service.py http://127.0.0.1:8090/stream.mjpg
 ```
 
-The detector reads the same hub, so it no longer competes with the UI for the
-device.
+Without a source argument it defaults to
+`http://127.0.0.1:8090/stream.mjpg`. Other flags: `--model`, `--conf`,
+`--no-show`, `--save`.
+
+The detector reads the same hub, so it does not compete with the UI for the
+device. `CAMERA_SOURCE=...` also works instead of the positional argument.
 
 ## Operator app
 
 Add a camera whose stream URL is:
 
 ```
-http://127.0.0.1:8090/stream.mjpg
+http://localhost:8090/stream.mjpg
 ```
 
 On web the app renders it with a plain `<img>`; on Linux/Windows/mobile
 `media_kit` plays the same URL. RTSP still works on desktop but not in a
 browser — browsers cannot play RTSP at all.
+
+`0.0.0.0` must not appear in the URL. It is a bind address, and Chrome rejects
+it for image subresources; the app rewrites it to `127.0.0.1`, but
+`localhost` is clearer.
 
 ## MediaMTX alternative
 
