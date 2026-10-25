@@ -72,37 +72,26 @@ That is what the `demo` profile uses; it is not a substitute for a real camera.
 
 ```powershell
 pip install -r requirements-cv.txt
-python cv_service.py http://127.0.0.1:8090/stream.mjpg
+uvicorn cv_service:app --host 0.0.0.0 --port 6532
 ```
 
-Without a source argument it defaults to
-`http://127.0.0.1:8090/stream.mjpg`. The positional source can also be a
-webcam index (`0`, `1`, ...), an RTSP/MJPEG URL, or a video file:
+The default source is webcam `0`. Override it with `CAMERA_SOURCE` — an
+MJPEG/RTSP URL, a video path, or another webcam index:
 
 ```powershell
-python cv_service.py 0
+$env:CAMERA_SOURCE = "http://127.0.0.1:8090/stream.mjpg"
+uvicorn cv_service:app --host 0.0.0.0 --port 6532
 ```
 
-When a `car`, `truck`, or `bus` is detected above `--conf`, the detector saves
-a JPEG snapshot under `alert_images/` and prints an alert. Snapshots are
-rate-limited by `--alert-cooldown` (default 5 s) so the stream is not blocked.
+`cv_service.py` exposes a FastAPI `app` with `/health` and `/stream.mjpg`.
+The MJPEG endpoint serves the annotated preview (rectangles + class names), so
+no OpenCV window is needed. The detection pipeline is available as `detect()`
+(yields label, confidence and frame) and `process()` (saves a JPEG under
+`alert_images/` when a `car`, `truck`, or `bus` is detected, at most once every
+5 seconds).
 
-Flags: `--model`, `--conf`, `--classes`, `--alert-dir`, `--alert-cooldown`,
-`--no-show`, `--save`. To also push alerts to the backend, point it at
-`POST /api/v1/incidents`:
-
-```powershell
-$env:INGEST_URL = "http://127.0.0.1:8086/api/v1/incidents"
-$env:INGEST_API_TOKEN = "local-ingest-token"
-python cv_service.py
-```
-
-`--incident-type` selects the type sent (default `VEHICLE_IN_ZONE`).
-
-The detector reads the same hub, so it does not compete with the UI for the
-device. `CAMERA_SOURCE=...` also works instead of the positional argument.
-Do not point `cv_service.py 0` at a webcam while `camera_hub.py` is already
-using it — a device can only be opened by one process.
+Only one process can open the webcam. If `camera_hub.py` is already using
+`/dev/video0`, point `CAMERA_SOURCE` at the hub URL instead of `0`.
 
 ## Operator app
 

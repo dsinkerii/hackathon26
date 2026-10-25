@@ -161,19 +161,22 @@ Follow logs with `docker compose logs -f web backend`.
 
 ## Optional: YOLO detector
 
-The detector reads the same MJPEG stream, so it never opens the device itself.
-Run it on the host (CPU inference needs no GPU):
+The detector opens webcam `0` by default. Run it on the host (CPU inference
+needs no GPU):
 
 ```powershell
 cd cv_branch
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements-cv.txt
-python cv_service.py http://127.0.0.1:8090/stream.mjpg
+uvicorn cv_service:app --host 0.0.0.0 --port 6532
 ```
 
-`--no-show` disables the preview window, `--conf` sets the confidence
-threshold, and `--model` selects different weights. Without an argument the
-detector defaults to `http://127.0.0.1:8090/stream.mjpg`.
+`cv_service.py` exposes a FastAPI app (`app`) with `/health` and
+`/stream.mjpg`. The MJPEG endpoint shows the annotated preview (rectangles +
+class names) in a browser or the Flutter app. `CAMERA_SOURCE` overrides the
+default source and accepts an MJPEG/RTSP URL, a video path, or a webcam index
+(`0`, `1`, ...). Detection is available through `detect()` and `process()` for
+the API to call.
 
 ## Native development (optional)
 

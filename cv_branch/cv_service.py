@@ -1,149 +1,89 @@
-# imports
+#imports
 from __future__ import annotations
 
-import argparse
-import base64
-import json
 import os
+import threading
 import time
-import urllib.error
-import urllib.request
-from datetime import datetime, timezone
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 import cv2
+from fastapi import FastAPI
+from fastapi.responses import StreamingResponse
 from ultralytics import YOLO
 
-# variables (or smth)
-DEFAULT_SOURCE = os.environ.get("CAMERA_SOURCE", "http://127.0.0.1:8090/stream.mjpg")
-DEFAULT_MODEL = os.environ.get("YOLO_MODEL", "yolo26n.pt")
-DEFAULT_CLASSES = os.environ.get("ALERT_CLASSES", "car,truck,bus")
-DEFAULT_ALERT_DIR = os.environ.get("ALERT_IMAGE_DIR", "alert_images")
-DEFAULT_INGEST_URL = os.environ.get("INGEST_URL", "")
-DEFAULT_INGEST_TOKEN = os.environ.get("INGEST_API_TOKEN", "")
+#variables(or smth)
+MODEL_PATH = os.environ.get("YOLO_MODEL", "yolo26n.pt")
+CAMERA_SOURCE = os.environ.get("CAMERA_SOURCE", "0")
+ALERT_CLASSES = {"car", "truck", "bus"}
+ALERT_CONF = 0.35
+ALERT_COOLDOWN = 5.0
+ALERT_DIR = Path(os.environ.get("ALERT_IMAGE_DIR", "alert_images"))
+HUMAN_CLASSES = {"person", "human"}
+HUMAN_CONF = 0.35
+HUMAN_COOLDOWN = 60.0
+HUMAN_DIR = Path(os.environ.get("ALERT_IMAGE_DIR", "alert_images"))
+
+# latest annotated frame, shared by the detector and the MJPEG endpoint
+_latest_jpeg = b""
+_frame_seq = 0
+_frame_cond = threading.Condition()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # one detection loop feeds both alerts and the MJPEG preview
+    threading.Thread(target=process, daemon=True).start()
+    yield
 
 
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="run YOLO on a webcam or the shared MJPEG camera stream.",
-        epilog=(
-            "the source argument takes precedence over CAMERA_SOURCE. "
-            "a plain number opens that local webcam (0, 1, ...); "
-            "an http(s)/rtsp URL or a video path is passed through."
-        ),
-    )
-    parser.add_argument(
-        "source",
-        nargs="?",
-        default=None,
-        help=(
-            "webcam index, camera URL or video path "
-            f"(default: {DEFAULT_SOURCE})"
-        ),
-    )
-    parser.add_argument("--model", default=DEFAULT_MODEL, help="path to the YOLO weights")
-    parser.add_argument(
-        "--conf", type=float, default=0.35, help="minimum confidence (default: 0.35)"
-    )
-    parser.add_argument(
-        "--classes",
-        default=DEFAULT_CLASSES,
-        help=f"comma-separated classes that trigger an alert (default: {DEFAULT_CLASSES})",
-    )
-    parser.add_argument(
-        "--alert-dir",
-        default=DEFAULT_ALERT_DIR,
-        help=f"directory for alert snapshots (default: {DEFAULT_ALERT_DIR})",
-    )
-    parser.add_argument(
-        "--alert-cooldown",
-        type=float,
-        default=5.0,
-        help="seconds between alert snapshots (default: 5.0)",
-    )
-    parser.add_argument(
-        "--ingest-url",
-        default=DEFAULT_INGEST_URL,
-        help="backend incidents endpoint, e.g. http://127.0.0.1:8086/api/v1/incidents "
-        "(default: INGEST_URL; empty disables posting)",
-    )
-    parser.add_argument(
-        "--ingest-token",
-        default=DEFAULT_INGEST_TOKEN,
-        help="X-Ingest-Token for the backend (default: INGEST_API_TOKEN)",
-    )
-    parser.add_argument(
-        "--incident-type",
-        default="VEHICLE_IN_ZONE",
-        help="incident type sent to the backend (default: VEHICLE_IN_ZONE)",
-    )
-    parser.add_argument(
-        "--no-show", action="store_true", help="do not open a preview window"
-    )
-    parser.add_argument(
-        "--save", action="store_true", help="write annotated output under runs/"
-    )
-    return parser.parse_args()
+# <-------------- Dsinkerii put your API stuff here pls pls pls pls
+# dsinkerii: yup on it
+app = FastAPI(title="cv service", lifespan=lifespan)
+
+_model = None
 
 
-def normalize_source(value: str):
-    """Turn "0"/"1" into a webcam index, leave URLs and file paths alone."""
+def get_model() -> YOLO:
+    global _model
+    if _model is None:
+        _model = YOLO(MODEL_PATH) # initialises model
+        print(_model.names) # prints dictionary
+    return _model
+
+
+def normalize_source(value):
     # can use several webcams for test, so have to switch between
-    value = value.strip()
-    if value.isdigit():
-        return int(value)
-    return value
+    value = str(value).strip()
+    return int(value) if value.isdigit() else value
 
 
-def parse_classes(value: str) -> set[str]:
-    return {name.strip().lower() for name in value.split(",") if name.strip()}
+def capture_image(source=CAMERA_SOURCE, frame=None, capture_type='ALERT') -> Path | None:
+    # well, camera capture
+    if frame is None:
+        cap = cv2.VideoCapture(normalize_source(source))
+        ret, frame = cap.read() # returns a single frame
+        cap.release()
+        if not ret:
+            return None
+
+    l_tm = time.localtime()
+    date = f"{l_tm.tm_year}_{l_tm.tm_mon}_{l_tm.tm_mday}_{l_tm.tm_hour}_{l_tm.tm_min}_{l_tm.tm_sec}"
+    match capture_type:
+        case 'ALERT':
+            ALERT_DIR.mkdir(parents=True, exist_ok=True)
+            path = ALERT_DIR / f"{date}.jpg"
+            cv2.imwrite(str(path), frame) # writes to file(hopefully)
+            print("CAUGHT EM!!! KIDNAPPERS!!!!!!")
+            return path
+        case 'HUMAN':
+            HUMAN_DIR.mkdir(parents=True, exist_ok=True)
+            path = HUMAN_DIR / f"{date}.jpg"
+            cv2.imwrite(str(path), frame) # writes to file(hopefully)
+            print("CAUGHT EM!!! UNKNOWNS???!!!")
+            return path
 
 
-def save_snapshot(frame, directory: Path) -> Path:
-    directory.mkdir(parents=True, exist_ok=True)
-    stamp = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
-    path = directory / f"{stamp}.jpg"
-    cv2.imwrite(str(path), frame)  # writes to file (hopefully)
-    return path
-
-
-def post_incident(
-    url: str,
-    token: str,
-    incident_type: str,
-    confidence: float,
-    label: str,
-    snapshot: Path,
-) -> None:
-    """POST the alert to the Spring backend (POST /api/v1/incidents)."""
-    # the API stuff Dsinkerii asked for pls pls pls pls
-    payload = {
-        "type": incident_type,
-        "occurredAt": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        "confidence": round(float(confidence), 3),
-        "description": (
-            f"Detected {label} on the playground (confidence {confidence:.2f})"
-        ),
-        "snapshotBase64": base64.b64encode(snapshot.read_bytes()).decode("ascii"),
-    }
-    request = urllib.request.Request(
-        url,
-        data=json.dumps(payload).encode("utf-8"),
-        headers={
-            "Content-Type": "application/json",
-            "X-Ingest-Token": token,
-        },
-        method="POST",
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=5) as response:
-            print(f"[cv] incident posted -> HTTP {response.status}", flush=True)
-    except (urllib.error.URLError, OSError) as exc:
-        print(f"[cv] incident post failed: {exc}", flush=True)
-
-
-def matching_detections(result, wanted: set[str], conf: float):
-    """Yield (label, confidence) for boxes whose class is in `wanted`."""
+def matching_detections(result, classes=ALERT_CLASSES, conf=ALERT_CONF, capture_type='ALERT'):
     boxes = result.boxes
     if boxes is None:
         return
@@ -151,74 +91,84 @@ def matching_detections(result, wanted: set[str], conf: float):
     for cls, score in zip(boxes.cls.tolist(), boxes.conf.tolist()):
         label = names.get(int(cls))
         # makes sure it's a car and not a toy
-        if label is not None and label.lower() in wanted and score >= conf:
+        if label in classes and score >= conf:
             yield label, float(score)
 
 
-def main() -> None:
-    args = parse_args()
-    source = normalize_source(args.source or DEFAULT_SOURCE)
-    wanted = parse_classes(args.classes)
-    alert_dir = Path(args.alert_dir)
+def publish(frame) -> None:
+    global _latest_jpeg, _frame_seq
+    ok, buffer = cv2.imencode(".jpg", frame)
+    if not ok:
+        return
+    with _frame_cond:
+        _latest_jpeg = buffer.tobytes()
+        _frame_seq += 1
+        _frame_cond.notify_all()
 
-    print(f"[cv] source = {source}", flush=True)
-    print(f"[cv] model  = {args.model}", flush=True)
-    print(f"[cv] alerts = {sorted(wanted)}", flush=True)
 
-    model = YOLO(args.model)  # initialises model
+def detect(source=CAMERA_SOURCE):
     # checks for dangerous objects
-    # test camera: 'http://109.206.96.58:8080/cam_1.cgi'
-    results = model.predict(
-        source=source,
+    #test camera: 'http://109.206.96.58:8080/cam_1.cgi'
+    results = get_model().predict(
+        source=normalize_source(source),
         stream=True,
-        show=not args.no_show,
-        save=args.save,
-        conf=args.conf,
+        show=False,
         stream_buffer=False,
     )
-
-    last_alert = 0.0
     try:
-        for index, result in enumerate(results, start=1):
-            now = time.monotonic()
-            detections = list(matching_detections(result, wanted, args.conf))
-
-            if detections and now - last_alert >= args.alert_cooldown:
-                last_alert = now
-                label, confidence = max(detections, key=lambda item: item[1])
-                # Reuse the frame YOLO already read instead of opening the
-                # camera a second time: a device can only be opened once and a
-                # second MJPEG connection would drift from the preview.
-                snapshot = save_snapshot(result.orig_img, alert_dir)
-                # CAUGHT EM!!! KIDNAPPERS!!!!!!
-                print(
-                    f"[cv] ALERT {label} ({confidence:.2f}) -> {snapshot}",
-                    flush=True,
-                )
-                if args.ingest_url:
-                    post_incident(
-                        args.ingest_url,
-                        args.ingest_token,
-                        args.incident_type,
-                        confidence,
-                        label,
-                        snapshot,
-                    )
-
-            if index % 30 == 0:
-                boxes = len(result.boxes) if result.boxes is not None else 0
-                print(f"[cv] frame {index}: {boxes} object(s)", flush=True)
-    except KeyboardInterrupt:
-        pass
+        for result in results:
+            publish(result.plot()) # rectangles + class names
+            for label, confidence in matching_detections(result, ALERT_CLASSES, ALERT_CONF, 'ALERT'):
+                yield label, confidence, result.orig_img
+            # same for humans, detect humans
+            for label, confidence in matching_detections(result, HUMAN_CLASSES, HUMAN_CONF, 'HUMAN'):
+                yield label, confidence, result.orig_img
     finally:
-        # Stop the reader threads before the interpreter tears down.
         close = getattr(results, "close", None)
         if callable(close):
-            try:
-                close()
-            except Exception:
-                pass
+            close()
+
+
+def process(source=CAMERA_SOURCE, conf=ALERT_CONF, classes=ALERT_CLASSES):
+    last_alert = 0.0
+    for label, confidence, frame in detect(source):
+        now = time.monotonic()
+        if now - last_alert < ALERT_COOLDOWN:
+            continue
+        last_alert = now
+        snapshot = capture_image(frame=frame)
+        print("CHILD SAFETY ALERT or smth idk they don't pay me")
+        print(f"[cv] {label} ({confidence:.2f}) -> {snapshot}")
+
+
+@app.get("/health")
+def health():
+    return {"status": "ok", "model": MODEL_PATH, "source": str(CAMERA_SOURCE)}
+
+
+@app.get("/stream.mjpg")
+def stream():
+    def frames():
+        last = -1
+        while True:
+            with _frame_cond:
+                _frame_cond.wait_for(lambda: _frame_seq != last, timeout=2.0)
+                jpeg, last = _latest_jpeg, _frame_seq
+            if not jpeg:
+                continue
+            yield (
+                b"--frame\r\n"
+                b"Content-Type: image/jpeg\r\n"
+                b"Content-Length: " + str(len(jpeg)).encode() + b"\r\n\r\n"
+                + jpeg + b"\r\n"
+            )
+
+    return StreamingResponse(
+        frames(), media_type="multipart/x-mixed-replace; boundary=frame"
+    )
 
 
 if __name__ == "__main__":
-    main()
+    import uvicorn
+
+    uvicorn.run(app, host="0.0.0.0", port=6532)
