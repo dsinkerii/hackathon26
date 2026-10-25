@@ -1,0 +1,57 @@
+server:
+  port: 8080
+  max-http-request-header-size: 16KB
+
+spring:
+  application:
+    name: safe-playground-backend
+  datasource:
+    url: jdbc:h2:file:./data/playground;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  flyway:
+    enabled: true
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 7MB
+
+app:
+  ingest:
+    token: ${INGEST_API_TOKEN:}
+    deduplication-window: ${INGEST_DEDUPLICATION_WINDOW:30s}
+  media:
+    directory: ${MEDIA_DIRECTORY:./data/media}
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://127.0.0.1:5173}
+  security:
+    jwt-secret: ${JWT_SECRET:}
+    initial-admin-username: ${INITIAL_ADMIN_USERNAME:}
+    initial-admin-password: ${INITIAL_ADMIN_PASSWORD:}
+  cv:
+    enabled: ${CV_INGEST_ENABLED:true}
+    base-url: ${CV_SERVICE_URL:http://127.0.0.1:6532}
+    longpoll-timeout: ${CV_LONGPOLL_TIMEOUT:65s}
+    error-backoff: ${CV_ERROR_BACKOFF:5s}
+
+---
+spring:
+  config:
+    activate:
+      on-profile: postgres
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/playground}
+    username: ${DATABASE_USERNAME:playground}
+    password: ${DATABASE_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
