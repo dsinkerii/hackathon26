@@ -15,6 +15,11 @@ import cv2
 from fastapi import FastAPI, Response
 from fastapi.responses import StreamingResponse
 from ultralytics import YOLO
+import torch
+
+# Unbounded cv2/OpenMP thread pools burn several cores per encode; keep them
+# in line before anything initialises them.
+cv2.setNumThreads(2)
 
 #variables(or smth)
 MODEL_PATH = os.environ.get("YOLO_MODEL", "yolo26n.pt")
@@ -32,6 +37,20 @@ HUMAN_DIR = Path(os.environ.get("ALERT_IMAGE_DIR", "alert_images"))
 # longer than this, it is reported again (long enough not to spam the journal).
 TRACK_RETRIGGER = float(os.environ.get("ALERT_TRACK_RETRIGGER", "300"))
 MAX_PENDING_ALERTS = int(os.environ.get("ALERT_QUEUE_SIZE", "50"))
+
+# CPU guard: on a plain laptop one inference per 30fps frame saturates all
+# cores and starves the capture stream. Process only every Nth frame and cap
+# the intra-op thread pool (env-tunable).
+PROCESS_STRIDE = int(os.environ.get("CV_PROCESS_STRIDE", "4"))
+TORCH_THREADS = int(os.environ.get("CV_TORCH_THREADS", "2"))
+
+# YOLO letterboxes every frame to imgsz²; 480 keeps enough detail for people
+# in a 1280x720 frame while running much faster on CPU than the 640 default.
+INFERENCE_IMGSZ = int(os.environ.get("CV_IMGSZ", "480"))
+
+# Downscale only the *published* MJPEG frame (inference still runs on the
+# full frame). 0.75 => 960x540: encodes ~2x faster and streams lighter.
+PUBLISH_SCALE = float(os.environ.get("CV_PUBLISH_SCALE", "1.0"))
 
 # latest annotated frame, shared by the detector and the MJPEG endpoint
 _latest_jpeg = b""
@@ -92,6 +111,9 @@ _model = None
 def get_model() -> YOLO:
     global _model
     if _model is None:
+        # Limit intra-op threads: the default (all cores) at ~100% CPU
+        # starves the capture stream, the hub and the app.
+        torch.set_num_threads(max(1, TORCH_THREADS))
         _model = YOLO(MODEL_PATH) # initialises model
         print(_model.names) # prints dictionary
     return _model
@@ -201,6 +223,8 @@ def detect(source=CAMERA_SOURCE):
             show=False,
             stream_buffer=False,
             verbose=False,
+            vid_stride=PROCESS_STRIDE,
+            imgsz=INFERENCE_IMGSZ,
         )
     except Exception as exc:
         # Older Ultralytics builds may not expose track(); prediction still
@@ -212,12 +236,19 @@ def detect(source=CAMERA_SOURCE):
             show=False,
             stream_buffer=False,
             verbose=False,
+            vid_stride=PROCESS_STRIDE,
+            imgsz=INFERENCE_IMGSZ,
         )
     try:
         for result in results:
             if _stop.is_set():
                 break
             annotated = result.plot()  # rectangles + class names
+            if PUBLISH_SCALE < 1.0:
+                annotated = cv2.resize(
+                    annotated, None, fx=PUBLISH_SCALE, fy=PUBLISH_SCALE,
+                    interpolation=cv2.INTER_AREA,
+                )
             publish(annotated)
             for label, confidence, track_id in matching_detections(
                     result, ALERT_CLASSES, ALERT_CONF):
@@ -338,4 +369,7 @@ def stream():
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=6532)
+    # 6532 falls into a Windows excluded port range; default to a free port.
+    uvicorn.run(
+        app, host="0.0.0.0", port=int(os.environ.get("CV_SERVICE_PORT", "6545"))
+    )

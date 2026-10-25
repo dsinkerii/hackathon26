@@ -3,12 +3,16 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Optional
 
 import cv2
+
+# 30 fps JPEG encode must not fan out to every core: 2 threads are plenty.
+cv2.setNumThreads(2)
 
 
 def _is_device(source) -> bool:
@@ -71,7 +75,12 @@ class CameraHub:
             return self._seq, self._frame
 
     def _open(self):
-        cap = cv2.VideoCapture(self.source)
+        if _is_device(self.source) and sys.platform == "win32":
+            # MSMF often fails to read frames while the device is busy;
+            # DirectShow is the reliable grabber for Windows devices.
+            cap = cv2.VideoCapture(self.source, cv2.CAP_DSHOW)
+        else:
+            cap = cv2.VideoCapture(self.source)
         if not cap.isOpened():
             cap.release()
             return None
